@@ -4,7 +4,8 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var status: StatusController!
   private var settingsWindow: SettingsWindow!
-  private let hotKey = HotKey()
+  private var model: SettingsModel!
+  private let hotKeys = HotKeys()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     // One Tuck at a time: a second copy (say, a build folder next to the one
@@ -18,16 +19,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings = TuckSettings.load(from: .standard)
     status = StatusController(settings: settings)
 
-    let model = SettingsModel(settings: settings)
+    model = SettingsModel(settings: settings)
     model.onChange = { [weak self] new in
       guard let self else { return }
-      let hotKeyChanged = new.hotKey != self.status.settings.hotKey
+      let old = self.status.settings
       self.status.settings = new
-      if hotKeyChanged { self.registerHotKey(new.hotKey) }
+      if new.hotKey != old.hotKey || new.quickOpenHotKey != old.quickOpenHotKey { self.registerHotKeys(new) }
     }
+    model.untuck = { [weak self] item in self?.status.untuck(item) }
+    model.refreshTucked = { [weak self] in self?.status.withFreshScan { _ in } }
+    status.onTuckedChange = { [weak self] items in self?.model.tucked = items }
     settingsWindow = SettingsWindow(model: model)
     status.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
-    registerHotKey(settings.hotKey)
+    registerHotKeys(settings)
 
     // Scriptable like the Omarchy version: `open "tuck://toggle"` and friends.
     NSAppleEventManager.shared().setEventHandler(
@@ -35,11 +39,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
   }
 
-  private func registerHotKey(_ preset: HotKeyPreset) {
-    hotKey.register(preset) { [weak self] in self?.status.toggle() }
+  private func registerHotKeys(_ s: TuckSettings) {
+    hotKeys.register(.toggle, s.hotKey, .init(
+      pressed: { [weak self] in self?.status.hotKeyPressed() },
+      released: { [weak self] in self?.status.hotKeyReleased() }))
+    hotKeys.register(.quickOpen, s.effectiveQuickOpenHotKey, .init(
+      pressed: { [weak self] in self?.status.quickOpen() }))
   }
 
-  /// tuck://toggle, tuck://expand, tuck://collapse, tuck://settings
+  /// tuck://toggle, expand, collapse, all, quickopen, settings
   @objc private func handleURL(_ event: NSAppleEventDescriptor, withReply reply: NSAppleEventDescriptor) {
     guard let s = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
           let host = URL(string: s)?.host else { return }
@@ -47,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     case "toggle": status.toggle()
     case "expand": status.expand()
     case "collapse": status.collapse()
+    case "all": status.toggleAll()
+    case "quickopen": status.quickOpen()
     case "settings": settingsWindow.show()
     default: break
     }

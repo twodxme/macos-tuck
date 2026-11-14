@@ -24,6 +24,10 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/Tuck"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+# CI passes the tag's version (VERSION=1.2.0) so the app matches its release.
+if [[ -n "${VERSION:-}" ]]; then
+  plutil -replace CFBundleShortVersionString -string "$VERSION" "$app/Contents/Info.plist"
+fi
 
 # Ad-hoc signature: enough to run locally. Downloads of an ad-hoc build are
 # quarantined by Gatekeeper; see README for the one-time "Open" step.
