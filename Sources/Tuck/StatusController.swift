@@ -8,15 +8,14 @@ private let log = Logger(subsystem: "com.twodxme.tuck", category: "status")
 ///   [ tucked icons … ] [ divider | ] [ arrow ‹ ] [ always-visible icons … ]
 ///
 /// macOS lays status items out right to left and gives apps no way to hide
-/// another app's item, so Tuck stretches its divider to 10,000 points while
-/// collapsed. Everything left of it is pushed off screen; ⌘-dragging an icon
+/// another app's item, so Tuck stretches its divider while
+/// collapsed (about half the screen; see `collapsedDividerLength`). Everything left of it is pushed off screen; ⌘-dragging an icon
 /// across the divider tucks or untucks it. The same trick as Hidden Bar,
 /// Dozer and Ice.
 @MainActor
 final class StatusController: NSObject, NSMenuDelegate {
   private let arrow: NSStatusItem
   private let divider: NSStatusItem
-  private let collapsedLength: CGFloat = 10_000
   private var autoHideTimer: Timer?
   private var hoverOpenTimer: Timer?
   private var hoverWatch: Timer?
@@ -40,7 +39,9 @@ final class StatusController: NSObject, NSMenuDelegate {
     if let button = arrow.button {
       button.target = self
       button.action = #selector(arrowClicked(_:))
-      button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+      // Act on press, like the system's own menu bar items; waiting for the
+      // release made every toggle feel a beat late.
+      button.sendAction(on: [.leftMouseDown, .rightMouseDown])
     }
     // Not disabled: macOS dims a disabled status button, which made the line
     // nearly invisible. With no action, clicks on it simply do nothing.
@@ -60,10 +61,11 @@ final class StatusController: NSObject, NSMenuDelegate {
 
   func expand() {
     expanded = true
-    divider.length = NSStatusItem.variableLength
+    // Content first, then length, so the menu bar lays out once, not twice.
     refresh()
+    divider.length = NSStatusItem.variableLength
     restartAutoHide()
-    logState("expand")
+    startHoverWatch()
   }
 
   /// Where the two items sit, for `log stream --predicate 'subsystem == "com.twodxme.tuck"'`.
@@ -84,9 +86,16 @@ final class StatusController: NSObject, NSMenuDelegate {
     }
     expanded = false
     autoHideTimer?.invalidate()
-    divider.length = collapsedLength
+    stopHoverWatch()
     refresh()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in self?.logState("collapse") }
+    divider.length = collapsedLength()
+  }
+
+  /// Sized for the screen the menu bar items are on.
+  private func collapsedLength() -> CGFloat {
+    guard let screen = divider.button?.window?.screen ?? NSScreen.main else { return 900 }
+    return collapsedDividerLength(screenWidth: screen.frame.width,
+                                  rightOfNotch: screen.auxiliaryTopRightArea?.width)
   }
 
   private func apply(old: TuckSettings?) {
@@ -97,16 +106,16 @@ final class StatusController: NSObject, NSMenuDelegate {
 
   private func refresh(misplaced: Bool = false) {
     if let button = arrow.button {
-      let name = settings.iconStyle.symbol(open: expanded)
-      let image = NSImage(systemSymbolName: name, accessibilityDescription: expanded ? "Tuck icons away" : "Show tucked icons")
-      image?.isTemplate = true
-      button.image = image
+      button.image = arrowImage(open: expanded)
       button.toolTip = misplaced
         ? "Drag Tuck's divider to the left of its arrow (hold ⌘ and drag) so it can tuck icons away."
         : (settings.showTooltip ? settings.tooltip(open: expanded) : nil)
     }
     if let button = divider.button {
-      // While collapsed the divider is 10,000 points of nothing; while open
+      // Nothing to draw while collapsed: a hidden button keeps the width
+      // but skips the backing store for ~950 points of empty menu bar.
+      button.isHidden = !expanded
+      // While collapsed the divider is a wide stretch of nothing; while open
       // it marks the boundary, unless the user prefers no marker.
       if expanded && settings.showDivider {
         button.image = StatusController.dividerImage
@@ -116,6 +125,17 @@ final class StatusController: NSObject, NSMenuDelegate {
         button.title = expanded ? " " : ""
       }
     }
+  }
+
+  /// Symbol images, built once per style and state rather than on every toggle.
+  private var imageCache: [String: NSImage] = [:]
+  private func arrowImage(open: Bool) -> NSImage? {
+    let name = settings.iconStyle.symbol(open: open)
+    if let cached = imageCache[name] { return cached }
+    let image = NSImage(systemSymbolName: name, accessibilityDescription: open ? "Tuck icons away" : "Show tucked icons")
+    image?.isTemplate = true
+    imageCache[name] = image
+    return image
   }
 
   /// A 2-point bar, 16 tall, drawn as a template so it follows the menu
@@ -138,17 +158,25 @@ final class StatusController: NSObject, NSMenuDelegate {
     autoHideTimer?.invalidate()
     guard expanded, settings.openOn == .click, settings.autoHide else { return }
     let interval = TimeInterval(settings.autoHideSeconds)
-    autoHideTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-      Task { @MainActor in self?.autoHideFired() }
+    autoHideTimer = timer(interval, tolerance: 0.5) { $0.autoHideFired() }
+  }
+
+  /// A one-shot or repeating main-run-loop timer. The tolerance lets macOS
+  /// fold Tuck's wakeups into ones it is doing anyway.
+  private func timer(_ interval: TimeInterval, tolerance: TimeInterval, repeats: Bool = false,
+                     _ body: @escaping @MainActor (StatusController) -> Void) -> Timer {
+    let t = Timer(timeInterval: interval, repeats: repeats) { [weak self] _ in
+      MainActor.assumeIsolated { if let self { body(self) } }
     }
+    t.tolerance = tolerance
+    RunLoop.main.add(t, forMode: .common)
+    return t
   }
 
   private func autoHideFired() {
     // Never collapse under the pointer: wait for it to leave the menu bar.
     if pointerInMenuBar() {
-      autoHideTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in
-        Task { @MainActor in self?.autoHideFired() }
-      }
+      autoHideTimer = timer(1, tolerance: 0.3) { $0.autoHideFired() }
       return
     }
     collapse()
@@ -157,26 +185,34 @@ final class StatusController: NSObject, NSMenuDelegate {
   // MARK: - hover mode
 
   private func installHoverTracking() {
-    hoverWatch?.invalidate()
+    stopHoverWatch()
     if let area = trackingArea { arrow.button?.removeTrackingArea(area) }
     trackingArea = nil
     guard settings.openOn == .hover, let button = arrow.button else { return }
     let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
     button.addTrackingArea(area)
     trackingArea = area
-    // Close once the pointer has been off the menu bar for a moment, so
-    // moving from the arrow onto a revealed icon keeps it open.
-    hoverWatch = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
-      Task { @MainActor in self?.hoverTick() }
-    }
+    if expanded { startHoverWatch() }
+  }
+
+  /// Hover mode closes once the pointer has been off the menu bar for a
+  /// moment, so moving from the arrow onto a revealed icon keeps it open.
+  /// The watch runs only while open: tucked away, Tuck never wakes up.
+  private func startHoverWatch() {
+    guard settings.openOn == .hover, hoverWatch == nil else { return }
+    lastPointerInBar = Date()
+    hoverWatch = timer(0.15, tolerance: 0.05, repeats: true) { $0.hoverTick() }
+  }
+
+  private func stopHoverWatch() {
+    hoverWatch?.invalidate()
+    hoverWatch = nil
   }
 
   @objc func mouseEntered(with event: NSEvent) {
     guard settings.openOn == .hover, !expanded else { return }
     hoverOpenTimer?.invalidate()
-    hoverOpenTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { [weak self] _ in
-      Task { @MainActor in self?.expand() }
-    }
+    hoverOpenTimer = timer(0.15, tolerance: 0.03) { $0.expand() }
   }
 
   @objc func mouseExited(with event: NSEvent) {
@@ -200,7 +236,7 @@ final class StatusController: NSObject, NSMenuDelegate {
 
   @objc private func arrowClicked(_ sender: NSStatusBarButton) {
     let event = NSApp.currentEvent
-    let isSecondary = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
+    let isSecondary = event?.type == .rightMouseDown || event?.modifierFlags.contains(.control) == true
     if isSecondary { showMenu() } else { toggle() }
   }
 

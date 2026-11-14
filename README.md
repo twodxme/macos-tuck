@@ -49,7 +49,7 @@ They're stored in `com.twodxme.tuck` defaults, so `defaults write com.twodxme.tu
 
 ## How it works
 
-macOS gives apps no way to hide another app's menu bar item. Tuck adds two items, a divider and an arrow, and while tucked stretches the divider to 10,000 points so everything to its left is pushed off screen. It's the same approach as Hidden Bar, Dozer, and Ice. Tuck refuses to collapse if the divider ends up to the right of its arrow (that would push the arrow away too) and says so in the arrow's tooltip.
+macOS gives apps no way to hide another app's menu bar item. Tuck adds two items, a divider and an arrow, and while tucked stretches the divider so everything to its left is pushed off screen. It's the same approach as Hidden Bar, Dozer, and Ice. Recent macOS drops a menu bar item wider than about half the screen, so the divider is sized to just past the space right of the notch (or just under half the screen without one) rather than a fixed huge width. Tuck refuses to collapse if the divider ends up to the right of its arrow (that would push the arrow away too) and says so in the arrow's tooltip.
 
 Not possible without the Accessibility permission, so not in Tuck: counting or listing tucked icons, and untucking them from Settings. Drag them back instead.
 

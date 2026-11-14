@@ -137,3 +137,17 @@ func canCollapse(dividerMinX: CGFloat?, arrowMinX: CGFloat?) -> Bool {
   guard let d = dividerMinX, let a = arrowMinX else { return false }
   return d < a
 }
+
+/// How wide the divider gets while collapsed. Since macOS 26/27 the menu bar
+/// silently drops a status item wider than about half the screen (a 10,000
+/// point divider simply vanished and hid nothing), and a divider that fits
+/// entirely in the visible bar leaves macOS's own « overflow marker behind.
+/// So aim just past the bar space right of the notch (or half the screen
+/// without one), staying under the half-screen ceiling. Measured on a
+/// 2048-point notched display: 880–1000 hide cleanly, 600 leaves «, 1024+
+/// hides nothing.
+func collapsedDividerLength(screenWidth: CGFloat, rightOfNotch: CGFloat?) -> CGFloat {
+  let ceiling = screenWidth / 2 - 40
+  let target = (rightOfNotch ?? screenWidth / 2) + 50
+  return max(200, min(target, ceiling))
+}

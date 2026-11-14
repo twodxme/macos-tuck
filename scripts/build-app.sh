@@ -7,14 +7,17 @@ cd "$(dirname "$0")/.."
 
 # One build per architecture, merged with lipo: a single multi-arch
 # `swift build` needs Xcode's build system, which the CLT lack.
+# -Osize: Tuck spends its life asleep, so size beats speed everywhere.
+flags=(-c release -Xswiftc -Osize)
 for arch in arm64 x86_64; do
-  swift build -c release --triple "$arch-apple-macosx13.0"
+  swift build "${flags[@]}" --triple "$arch-apple-macosx13.0"
 done
 mkdir -p build
 bin=build/Tuck-universal
 lipo -create -output "$bin" \
-  "$(swift build -c release --triple arm64-apple-macosx13.0 --show-bin-path)/Tuck" \
-  "$(swift build -c release --triple x86_64-apple-macosx13.0 --show-bin-path)/Tuck"
+  "$(swift build "${flags[@]}" --triple arm64-apple-macosx13.0 --show-bin-path)/Tuck" \
+  "$(swift build "${flags[@]}" --triple x86_64-apple-macosx13.0 --show-bin-path)/Tuck"
+strip -x "$bin"   # local symbols only; nothing at runtime needs them
 
 app=build/Tuck.app
 rm -rf "$app"

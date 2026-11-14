@@ -70,4 +70,15 @@ import Testing
     s.openOn = .hover
     #expect(s.tooltip(open: true).contains("pointer is over it"))
   }
+
+  @Test func collapsedLengthStaysUnderHalfTheScreen() {
+    // The notched 2048-point display it was measured on: 880–1000 works.
+    let notched = collapsedDividerLength(screenWidth: 2048, rightOfNotch: 898.5)
+    #expect(notched > 880 && notched < 1000)
+    // No notch: just under half the screen.
+    #expect(collapsedDividerLength(screenWidth: 1920, rightOfNotch: nil) == 920)
+    // Never over the ceiling, never silly small.
+    #expect(collapsedDividerLength(screenWidth: 1000, rightOfNotch: 900) == 460)
+    #expect(collapsedDividerLength(screenWidth: 200, rightOfNotch: nil) == 200)
+  }
 }
