@@ -20,7 +20,7 @@ brew install --cask twodxme/tap/tuck
 
 Or download `Tuck.zip` from the [latest release](https://github.com/twodxme/macos-tuck/releases/latest), unzip it, and move Tuck.app to /Applications.
 
-Tuck isn't notarized (that needs a paid Apple developer account), so macOS blocks the first launch of a downloaded copy. Open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**. The Homebrew cask clears this for you.
+Tuck isn't notarized (that needs a paid Apple developer account), so macOS blocks the first launch of a downloaded copy. Open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
 
 Or build it yourself; only the Command Line Tools are needed, no Xcode:
 
