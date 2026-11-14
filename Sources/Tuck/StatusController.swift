@@ -42,7 +42,9 @@ final class StatusController: NSObject, NSMenuDelegate {
       button.action = #selector(arrowClicked(_:))
       button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
-    divider.button?.isEnabled = false
+    // Not disabled: macOS dims a disabled status button, which made the line
+    // nearly invisible. With no action, clicks on it simply do nothing.
+    divider.button?.toolTip = "Tuck divider: ⌘-drag icons to its left to tuck them"
     apply(old: nil)
     // Start open for a moment so both items get laid out and measured, then
     // collapse unless the user wants it open.
@@ -107,16 +109,28 @@ final class StatusController: NSObject, NSMenuDelegate {
       // While collapsed the divider is 10,000 points of nothing; while open
       // it marks the boundary, unless the user prefers no marker.
       if expanded && settings.showDivider {
-        let image = NSImage(systemSymbolName: "line.vertical", accessibilityDescription: "Tuck divider")
-        image?.isTemplate = true
-        button.image = image
-        button.alphaValue = 0.55
+        button.image = StatusController.dividerImage
+        button.title = ""
       } else {
         button.image = nil
         button.title = expanded ? " " : ""
       }
     }
   }
+
+  /// A 2-point bar, 16 tall, drawn as a template so it follows the menu
+  /// bar's light/dark appearance at full strength.
+  static let dividerImage: NSImage = {
+    let size = NSSize(width: 8, height: 16)
+    let image = NSImage(size: size, flipped: false) { rect in
+      NSColor.black.setFill()
+      NSBezierPath(roundedRect: NSRect(x: (rect.width - 2) / 2, y: 0, width: 2, height: rect.height), xRadius: 1, yRadius: 1).fill()
+      return true
+    }
+    image.isTemplate = true
+    image.accessibilityDescription = "Tuck divider"
+    return image
+  }()
 
   // MARK: - auto-hide
 
