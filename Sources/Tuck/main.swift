@@ -7,6 +7,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private let hotKey = HotKey()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    // One Tuck at a time: a second copy (say, a build folder next to the one
+    // in /Applications) would add a second arrow and divider and fight it.
+    let me = NSRunningApplication.current
+    if let id = Bundle.main.bundleIdentifier,
+       NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0 != me }) {
+      NSApp.terminate(nil)
+      return
+    }
     let settings = TuckSettings.load(from: .standard)
     status = StatusController(settings: settings)
 
@@ -46,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   // Quitting with icons pushed off screen would leave them hidden until the
   // divider is gone; it goes with the app, but expand first to be tidy.
-  func applicationWillTerminate(_ notification: Notification) { status.expand() }
+  func applicationWillTerminate(_ notification: Notification) { status?.expand() }
 }
 
 // Top-level code runs on the main thread; say so to the compiler.
