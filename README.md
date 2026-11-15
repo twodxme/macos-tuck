@@ -15,7 +15,9 @@ Tiny and asleep almost all the time: 0% CPU and no wakeups while tucked away, ab
 With [Homebrew](https://brew.sh):
 
 ```bash
-brew install --cask twodxme/tap/tuck
+brew tap twodxme/tap
+brew trust twodxme/tap      # newer Homebrew asks you to trust third-party taps
+brew install --cask tuck
 ```
 
 Or download `Tuck.zip` from the [latest release](https://github.com/twodxme/macos-tuck/releases/latest), unzip it, and move Tuck.app to /Applications.
