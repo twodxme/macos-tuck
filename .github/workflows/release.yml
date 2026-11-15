@@ -4,7 +4,9 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: write      # publish the release
+  id-token: write      # sign the build provenance (Sigstore)
+  attestations: write  # store it on GitHub
 
 jobs:
   release:
@@ -15,10 +17,18 @@ jobs:
         run: swift test
       - name: Build Tuck.zip
         run: VERSION="${GITHUB_REF_NAME#v}" scripts/build-app.sh --zip
+      # Signed proof that this zip was built here, from this commit, by this
+      # workflow. Check a download with:
+      #   gh attestation verify Tuck.zip -R twodxme/macos-tuck
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: build/Tuck.zip
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          shasum -a 256 build/Tuck.zip | tee build/Tuck.zip.sha256
+          # Bare file name inside, so `shasum -a 256 -c Tuck.zip.sha256` works next to a download.
+          (cd build && shasum -a 256 Tuck.zip | tee Tuck.zip.sha256)
           gh release create "$GITHUB_REF_NAME" build/Tuck.zip build/Tuck.zip.sha256 \
             --title "Tuck $GITHUB_REF_NAME" --generate-notes

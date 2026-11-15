@@ -9,6 +9,7 @@
   <img alt="macOS 13 or later" src="https://img.shields.io/badge/macOS-13%2B-555">
   <img alt="No third-party dependencies" src="https://img.shields.io/badge/dependencies-none-2EA44F">
   <img alt="No network access" src="https://img.shields.io/badge/network-none-2EA44F">
+  <img alt="Signed build provenance" src="https://img.shields.io/badge/build-attested-2EA44F?logo=sigstore&logoColor=white">
 </p>
 
 Tuck the menu bar icons you rarely need behind a divider. Click the arrow, press a shortcut, or let it fold itself away again. The macOS sibling of [Tuck for Omarchy](https://github.com/twodxme/omarchy-tuck).
@@ -61,7 +62,14 @@ Tuck sits in your menu bar all day, so here is exactly what it does and doesn't 
 - **No permissions by default.** Accessibility is asked for only if you turn on icon tracking, and only to see and move menu bar icons. See [Permissions](#permissions).
 - **Writes only its own settings,** to `com.twodxme.tuck` in your user defaults. One exception, only if you choose *Compact* or *Tight* icon spacing: the two macOS-wide keys `NSStatusItemSpacing` and `NSStatusItemSelectionPadding`. Setting spacing back to *macOS default* removes them.
 - **Small enough to read.** About 2,200 lines of Swift with no third-party dependencies, only Apple's frameworks. MIT licensed.
-- **Releases are built in public.** Each release is built by [GitHub Actions](.github/workflows/release.yml) from the tagged commit, after the tests pass, and published with a SHA-256 checksum next to `Tuck.zip`. Homebrew checks that checksum for you. For a manual download, compare `shasum -a 256 Tuck.zip` with the release's `Tuck.zip.sha256`, or skip the download and [build it yourself](#install).
+- **Releases are built in public, and you can prove it.** Each release is built by [GitHub Actions](.github/workflows/release.yml) from the tagged commit, after the tests pass. Since 1.2.2 every `Tuck.zip` carries a signed [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (Sigstore), so you can check that a download came from this repository's workflow and which commit it was built from, and a SHA-256 checksum. Homebrew checks the checksum for you; for a manual download:
+
+  ```bash
+  gh attestation verify Tuck.zip -R twodxme/macos-tuck   # built here, by CI, from this commit
+  shasum -a 256 -c Tuck.zip.sha256                        # matches the published checksum
+  ```
+
+  Or skip the download and [build it yourself](#install).
 - **Honest about signing.** Tuck is ad-hoc signed and not notarized, because notarizing needs a paid Apple developer account. That is why macOS asks you to approve the first launch.
 
 ### Uninstall
