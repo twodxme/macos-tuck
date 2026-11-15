@@ -2,6 +2,15 @@
 
 # Tuck for macOS
 
+<p>
+  <a href="https://github.com/twodxme/macos-tuck/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/twodxme/macos-tuck?color=E0156B"></a>
+  <a href="https://github.com/twodxme/macos-tuck/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/twodxme/macos-tuck/ci.yml?branch=main&label=tests"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/twodxme/macos-tuck?color=blue"></a>
+  <img alt="macOS 13 or later" src="https://img.shields.io/badge/macOS-13%2B-555">
+  <img alt="No third-party dependencies" src="https://img.shields.io/badge/dependencies-none-2EA44F">
+  <img alt="No network access" src="https://img.shields.io/badge/network-none-2EA44F">
+</p>
+
 Tuck the menu bar icons you rarely need behind a divider. Click the arrow, press a shortcut, or let it fold itself away again. The macOS sibling of [Tuck for Omarchy](https://github.com/twodxme/omarchy-tuck).
 
 **Tucked away:** one arrow, and a count of what's behind it.
@@ -16,7 +25,7 @@ Tuck the menu bar icons you rarely need behind a divider. Click the arrow, press
 
 ![Tuck showing everything: one more icon appears left of a dashed divider](docs/all.png)
 
-Tiny and asleep almost all the time: 0% CPU and no wakeups while tucked away, about 20 MB of memory, a 0.3 MB app. Works on macOS 13 and later, tested on macOS 27.
+Tiny and asleep almost all the time: 0% CPU and no wakeups while tucked away, about 25 MB of memory (35 MB once you've opened its menu or Settings), a 2 MB app. Never touches the network, collects nothing, and needs no permissions unless you opt in. Works on macOS 13 and later, tested on macOS 27.
 
 ## Install
 
@@ -38,6 +47,30 @@ Or build it yourself; only the Command Line Tools are needed, no Xcode:
 scripts/build-app.sh        # -> build/Tuck.app, universal, ad-hoc signed
 cp -R build/Tuck.app /Applications/
 ```
+
+## Privacy and trust
+
+Tuck sits in your menu bar all day, so here is exactly what it does and doesn't do, and how to check each point yourself.
+
+- **No network.** Tuck never connects to anything: no analytics, telemetry, crash reporting, update checks, or accounts. The only web addresses in the code are the *GitHub* and *Report an Issue* buttons in Settings → About, which open your browser when you click them. Check: `grep -rn "http" Sources/`.
+- **No permissions by default.** Accessibility is asked for only if you turn on icon tracking, and only to see and move menu bar icons. See [Permissions](#permissions).
+- **Writes only its own settings,** to `com.twodxme.tuck` in your user defaults. One exception, only if you choose *Compact* or *Tight* icon spacing: the two macOS-wide keys `NSStatusItemSpacing` and `NSStatusItemSelectionPadding`. Setting spacing back to *macOS default* removes them.
+- **Small enough to read.** About 2,200 lines of Swift with no third-party dependencies, only Apple's frameworks. MIT licensed.
+- **Releases are built in public.** Each release is built by [GitHub Actions](.github/workflows/release.yml) from the tagged commit, after the tests pass, and published with a SHA-256 checksum next to `Tuck.zip`. Homebrew checks that checksum for you. For a manual download, compare `shasum -a 256 Tuck.zip` with the release's `Tuck.zip.sha256`, or skip the download and [build it yourself](#install).
+- **Honest about signing.** Tuck is ad-hoc signed and not notarized, because notarizing needs a paid Apple developer account. That is why macOS asks you to approve the first launch.
+
+### Uninstall
+
+Quit Tuck from its menu, then delete it. Tuck's divider goes with the app, so every icon comes back.
+
+```bash
+brew uninstall --zap --cask tuck          # Homebrew: app and settings
+# or by hand:
+rm -rf /Applications/Tuck.app
+defaults delete com.twodxme.tuck
+```
+
+If you changed icon spacing, set it back to *macOS default* in Settings first, or remove it afterwards with `defaults -currentHost delete -g NSStatusItemSpacing; defaults -currentHost delete -g NSStatusItemSelectionPadding`.
 
 ## Use
 
@@ -131,7 +164,7 @@ Tuck is built to disappear:
 - **Nothing polls while tucked.** Timers exist only while Tuck is open (auto-hide, hover) and carry tolerance, so macOS can batch them with its own wakeups.
 - **Listeners are event-driven and scoped.** The app-switch observer exists only while open, the ⌘-drag monitor only while tucked and only if you turned it on.
 - **Accessibility scans run only while open**, in the background, asking apps in parallel with a short timeout so a frozen app can't stall them (~0.3 s).
-- **Small build**: optimized for size and stripped; the universal binary is about 0.3 MB.
+- **Small build**: optimized for size and stripped; the universal binary is about 0.8 MB, the whole app (icon included) about 2 MB.
 
 The short fade as icons tuck and untuck is drawn by macOS, not Tuck. Tuck's own work takes about 8 ms; the rest (roughly a fifth of a second before macOS redraws, then its fade) happens in the system menu bar process and can't be shortened by an app.
 
