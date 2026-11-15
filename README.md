@@ -50,6 +50,11 @@ cp -R build/Tuck.app /Applications/
 
 ## Privacy and trust
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/privacy-dark.png">
+  <img src="docs/privacy-light.png" alt="Privacy at a glance. Data Not Collected: Tuck doesn't collect, store, or send any data. No network: never connects to anything. No tracking: no analytics or crash reports. No permissions: Accessibility only if you opt in. Open source: MIT, zero dependencies." width="548">
+</picture>
+
 Tuck sits in your menu bar all day, so here is exactly what it does and doesn't do, and how to check each point yourself.
 
 - **No network.** Tuck never connects to anything: no analytics, telemetry, crash reporting, update checks, or accounts. The only web addresses in the code are the *GitHub* and *Report an Issue* buttons in Settings → About, which open your browser when you click them. Check: `grep -rn "http" Sources/`.
@@ -159,7 +164,9 @@ defaults write com.twodxme.tuck collapsedLength -float 900
 
 ## Resource use
 
-Tuck is built to disappear:
+Tuck is built to disappear. Here it is in Activity Monitor a few minutes after launch, with its menu opened and closed in between: no CPU, no idle wake-ups, and just over half a second of CPU time in total.
+
+![Activity Monitor filtered to Tuck: 0.0 % CPU, 0.59 seconds of CPU time, 4 threads, 0 idle wake ups](docs/activity-monitor.png)
 
 - **Nothing polls while tucked.** Timers exist only while Tuck is open (auto-hide, hover) and carry tolerance, so macOS can batch them with its own wakeups.
 - **Listeners are event-driven and scoped.** The app-switch observer exists only while open, the ⌘-drag monitor only while tucked and only if you turned it on.
@@ -182,6 +189,7 @@ A few macOS 27 details Tuck works around: clicks on menu bar icons arrive withou
 swift build
 scripts/test.sh                 # swift-testing, works with only the CLT installed
 scripts/make-icon.sh            # redraw Resources/AppIcon.icns from scripts/make-icon.swift
+scripts/make-trust-card.sh      # redraw the privacy card in docs/
 /usr/bin/log stream --level info --predicate 'subsystem == "com.twodxme.tuck"'
 ```
 
