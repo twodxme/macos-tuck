@@ -3,27 +3,17 @@ import SwiftUI
 
 /// Shared bits for the Settings window.
 
-/// Section title: small, uppercase, accent-colored, with an optional value
-/// on the right.
+/// Section title: small, uppercase, accent-colored (as in Tuck's menu).
 struct SectionTitle: View {
   let title: String
-  var value: String? = nil
-  init(_ title: String, value: String? = nil) { self.title = title; self.value = value }
+  init(_ title: String) { self.title = title }
 
   var body: some View {
-    HStack(alignment: .firstTextBaseline) {
-      Text(title.uppercased())
-        .font(.system(size: 11, weight: .semibold))
-        .tracking(0.4)
-        .foregroundStyle(Color.accentColor)
-      if let value {
-        Spacer(minLength: 8)
-        Text(value).font(.system(size: 12, weight: .medium).monospacedDigit())
-      }
-    }
-    .padding(.horizontal, 2)
-    .accessibilityElement(children: .combine)
-    .accessibilityAddTraits(.isHeader)
+    Text(title.uppercased())
+      .font(.system(size: 11, weight: .semibold))
+      .tracking(0.4)
+      .foregroundStyle(Color.accentColor)
+      .accessibilityAddTraits(.isHeader)
   }
 }
 
@@ -48,13 +38,9 @@ struct BarItemIcon: View {
 }
 
 /// An NSVisualEffectView background.
-struct Material: NSViewRepresentable {
+struct VisualEffect: NSViewRepresentable {
   let material: NSVisualEffectView.Material
-  var state: NSVisualEffectView.State = .active
-  init(_ material: NSVisualEffectView.Material, state: NSVisualEffectView.State = .active) {
-    self.material = material
-    self.state = state
-  }
+  let state: NSVisualEffectView.State
 
   func makeNSView(context: Context) -> NSVisualEffectView {
     let v = NSVisualEffectView()

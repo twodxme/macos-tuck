@@ -29,7 +29,7 @@ final class HotKeys {
     }
   }
 
-  func unregister(_ slot: Slot) {
+  private func unregister(_ slot: Slot) {
     if let ref = refs.removeValue(forKey: slot) { UnregisterEventHotKey(ref) }
     HotKeys.handlers[slot.rawValue] = nil
   }

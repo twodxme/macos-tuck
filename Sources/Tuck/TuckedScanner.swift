@@ -17,10 +17,9 @@ enum TuckedScanner {
   static var isTrusted: Bool { AXIsProcessTrusted() }
 
   /// Shows macOS's "allow Accessibility" prompt if Tuck isn't trusted yet.
-  @discardableResult
-  static func requestTrust() -> Bool {
+  static func requestTrust() {
     let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-    return AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
+    _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
   }
 
   /// Every menu bar icon on screen except Tuck's own, in screen coordinates

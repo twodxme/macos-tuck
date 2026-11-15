@@ -83,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     case "all": status.toggleAll()
     case "quickopen": status.quickOpen()
     case "settings": settingsWindow.show()
-    case "menu": status.showMenuFromURL()
+    case "menu": status.showMenu()
     default: break
     }
   }

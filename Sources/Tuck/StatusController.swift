@@ -36,6 +36,9 @@ final class StatusController: NSObject {
   private var peek: (wasCollapsed: Bool, at: Date)?
 
   private(set) var mode: Mode = .open
+  /// The divider sits right of the arrow, so Tuck can't collapse; the
+  /// arrow's tooltip says how to fix it. Kept until a collapse works.
+  private var misplaced = false
   var expanded: Bool { mode != .collapsed }
 
   /// Tucked icons from the last scan (only when `trackTucked` is on).
@@ -102,6 +105,9 @@ final class StatusController: NSObject {
     // Fresh items report x = 0 until the bar has placed them; wait for
     // real, distinct positions before judging the layout.
     let a = arrow.button?.window?.frame ?? .zero, d = divider.button?.window?.frame ?? .zero
+    func retry() {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in self?.waitForLayout(tries: tries - 1) }
+    }
     if mode == .collapsed {
       // Collapsed from the first frame (the last layout was sound). A
       // stretched divider reports no useful position; what matters is that
@@ -114,25 +120,23 @@ final class StatusController: NSObject {
         expand(misplaced: true)
         return
       }
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in self?.waitForLayout(tries: tries - 1) }
+      retry()
       return
     }
     if a.width > 0, d.width > 0, a.minX > 0, d.minX > 0, a.minX != d.minX {
-      if layoutOK() {
-        if mode != .collapsed { collapse() }
-      } else {
-        expand(misplaced: true)
-      }
+      layoutOK() ? setMode(.collapsed, misplaced: false) : expand(misplaced: true)
       return
     }
     guard tries > 0 else { expand(misplaced: true); return }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in self?.waitForLayout(tries: tries - 1) }
+    retry()
   }
 
   private func layoutOK() -> Bool {
     let ok = canCollapse(dividerMinX: divider.button?.window?.frame.minX,
                          arrowMinX: arrow.button?.window?.frame.minX)
-    UserDefaults.standard.set(ok, forKey: Self.layoutOKKey)
+    if UserDefaults.standard.object(forKey: Self.layoutOKKey) as? Bool != ok {
+      UserDefaults.standard.set(ok, forKey: Self.layoutOKKey)
+    }
     if !ok {
       log.info("layout not ok: arrow=\(NSStringFromRect(self.arrow.button?.window?.frame ?? .zero), privacy: .public) divider=\(NSStringFromRect(self.divider.button?.window?.frame ?? .zero), privacy: .public)")
     }
@@ -163,15 +167,19 @@ final class StatusController: NSObject {
       log.info("collapse refused: divider not left of arrow")
       return
     }
-    setMode(.collapsed)
+    setMode(.collapsed, misplaced: false)
   }
 
-  private func setMode(_ new: Mode, misplaced: Bool = false) {
+  /// `misplaced` nil keeps the current state (re-applying after a settings
+  /// change shouldn't forget a known bad layout).
+  private func setMode(_ new: Mode, misplaced: Bool? = nil) {
+    let old = mode
     let wasExpanded = expanded
     mode = new
-    log.info("mode \(String(describing: new), privacy: .public)\(misplaced ? " (misplaced)" : "", privacy: .public)")
+    if let misplaced { self.misplaced = misplaced }
+    log.info("mode \(String(describing: new), privacy: .public)\(self.misplaced ? " (misplaced)" : "", privacy: .public)")
     // Content first, then lengths, so the bar lays out once.
-    refresh(misplaced: misplaced)
+    refresh()
     switch new {
     case .collapsed:
       if let h = hiddenDivider { h.length = NSStatusItem.variableLength }
@@ -191,7 +199,7 @@ final class StatusController: NSObject {
       startHoverWatch()
       watchAppSwitches(true)
       watchDrags(false)
-      if !wasExpanded || new == .all { scheduleScan() }
+      if !wasExpanded || (new == .all && old != .all) { scheduleScan() }
     } else {
       autoHideTimer?.invalidate(); autoHideTimer = nil
       scanTimer?.invalidate(); scanTimer = nil
@@ -222,7 +230,15 @@ final class StatusController: NSObject {
     if old?.trackTucked != settings.trackTucked {
       if settings.trackTucked { TuckedScanner.requestTrust(); scheduleScan() } else { setTucked([]) }
     }
-    if old != nil { setMode(mode) } // re-apply lengths, listeners and labels
+    // Re-apply lengths, listeners and labels, but not for settings that
+    // don't touch them (shortcuts, spacing, start open).
+    if var unrelated = old {
+      unrelated.hotKey = settings.hotKey
+      unrelated.quickOpenHotKey = settings.quickOpenHotKey
+      unrelated.spacing = settings.spacing
+      unrelated.startOpen = settings.startOpen
+      if unrelated != settings { setMode(mode) }
+    }
   }
 
   // MARK: - always-hidden section
@@ -250,7 +266,9 @@ final class StatusController: NSObject {
 
   // MARK: - drawing
 
-  private func refresh(misplaced: Bool = false) {
+  private static let countFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
+
+  private func refresh() {
     if let button = arrow.button {
       button.image = arrowImage(open: expanded)
       button.toolTip = misplaced
@@ -260,7 +278,7 @@ final class StatusController: NSObject {
       let count = tucked.count
       if !expanded, settings.trackTucked, settings.showCount, count > 0 {
         button.attributedTitle = NSAttributedString(string: "\(count)", attributes: [
-          .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium),
+          .font: Self.countFont,
           .baselineOffset: 1,
         ])
         button.setAccessibilityValue("\(count) tucked")
@@ -353,14 +371,17 @@ final class StatusController: NSObject {
   /// Checked only when a timer fires or an app switches, never polled.
   private func menuOpen() -> Bool {
     guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
-          let screen = NSScreen.screens.first else { return false }
+          let top = NSScreen.screens.first?.frame.maxY else { return false }
     let windows = list.compactMap { w -> WindowSnapshot? in
       guard let layer = w[kCGWindowLayer as String] as? Int,
             let b = w[kCGWindowBounds as String] as? [String: CGFloat] else { return nil }
       return WindowSnapshot(layer: layer, bounds: CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0))
     }
-    let barHeight = max(NSStatusBar.system.thickness, screen.frame.maxY - screen.visibleFrame.maxY)
-    return dropdownOpen(windows, barHeight: barHeight, screenWidth: screen.frame.width)
+    // Each display's menu bar, in the window list's top-left coordinates.
+    let bars = NSScreen.screens.map { s in
+      CGRect(x: s.frame.minX, y: top - s.frame.maxY, width: s.frame.width, height: Self.barHeight(s))
+    }
+    return dropdownOpen(windows, bars: bars)
   }
 
   // MARK: - collapse on app switch
@@ -430,6 +451,7 @@ final class StatusController: NSObject {
 
   private func installHoverTracking() {
     stopHoverWatch()
+    hoverOpenTimer?.invalidate()
     if let area = trackingArea { arrow.button?.removeTrackingArea(area) }
     trackingArea = nil
     guard settings.openOn == .hover, let button = arrow.button else { return }
@@ -444,7 +466,11 @@ final class StatusController: NSObject {
   private func startHoverWatch() {
     guard settings.openOn == .hover, hoverWatch == nil else { return }
     lastPointerInBar = Date()
-    hoverWatch = timer(0.15, tolerance: 0.05, repeats: true) { $0.hoverTick() }
+    scheduleHoverTick(after: 0.15)
+  }
+
+  private func scheduleHoverTick(after seconds: TimeInterval) {
+    hoverWatch = timer(seconds, tolerance: seconds / 3) { $0.hoverTick() }
   }
 
   private func stopHoverWatch() {
@@ -462,31 +488,42 @@ final class StatusController: NSObject {
     hoverOpenTimer?.invalidate()
   }
 
+  /// A one-shot that re-arms itself: quick while the pointer may be
+  /// leaving, slow while a dropdown holds Tuck open (asking the window
+  /// server about every window ~7 times a second would be wasteful).
   private func hoverTick() {
+    hoverWatch = nil
     guard settings.openOn == .hover, expanded else { return }
-    if pointerInMenuBar() || menuOpen() { lastPointerInBar = Date(); return }
-    if Date().timeIntervalSince(lastPointerInBar) > 0.45 { collapse() }
+    if pointerInMenuBar() { lastPointerInBar = Date(); scheduleHoverTick(after: 0.15); return }
+    if menuOpen() { lastPointerInBar = Date(); scheduleHoverTick(after: 0.6); return }
+    if Date().timeIntervalSince(lastPointerInBar) > 0.45 { collapse(); return }
+    scheduleHoverTick(after: 0.15)
   }
 
   private func pointerInMenuBar() -> Bool {
     let p = NSEvent.mouseLocation
     guard let screen = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) else { return false }
-    let barHeight = max(NSStatusBar.system.thickness, screen.frame.maxY - screen.visibleFrame.maxY)
-    return p.y >= screen.frame.maxY - barHeight - 2
+    return p.y >= screen.frame.maxY - Self.barHeight(screen) - 2
+  }
+
+  private static func barHeight(_ screen: NSScreen) -> CGFloat {
+    max(NSStatusBar.system.thickness, screen.frame.maxY - screen.visibleFrame.maxY)
   }
 
   // MARK: - tracking tucked icons (opt-in, Accessibility)
 
   /// Scan once the bar has settled after opening. Hidden icons only exist
   /// for Accessibility while on screen, so this never runs while collapsed.
+  private var canScan: Bool { settings.trackTucked && TuckedScanner.isTrusted }
+
   private func scheduleScan() {
     scanTimer?.invalidate(); scanTimer = nil
-    guard settings.trackTucked, expanded, TuckedScanner.isTrusted else { return }
+    guard canScan, expanded else { return }
     scanTimer = timer(0.45, tolerance: 0.1) { $0.scan() }
   }
 
   private func scan(then: (() -> Void)? = nil) {
-    guard settings.trackTucked, expanded, TuckedScanner.isTrusted,
+    guard canScan, expanded,
           let dividerFrame = divider.button?.window?.frame else { then?(); return }
     let dividerX = dividerFrame.minX
     let hiddenX = hiddenDivider?.button?.window?.frame.minX
@@ -501,7 +538,9 @@ final class StatusController: NSObject {
   }
 
   private func setTucked(_ list: [TuckedScanner.Found]) {
+    let changed = list.map(\.item) != tucked.map(\.item)
     tucked = list
+    guard changed else { return }
     refresh()
     onTuckedChange(list.map(\.item))
     onStateChange()
@@ -509,7 +548,7 @@ final class StatusController: NSObject {
 
   /// Open, scan, then hand over the fresh list.
   func withFreshScan(_ body: @escaping ([TuckedScanner.Found]) -> Void) {
-    guard settings.trackTucked, TuckedScanner.isTrusted else { body([]); return }
+    guard canScan else { body([]); return }
     let wasExpanded = expanded
     if !wasExpanded { expand(); scanTimer?.invalidate(); scanTimer = nil }
     let delay = wasExpanded ? 0.0 : 0.45
@@ -530,10 +569,10 @@ final class StatusController: NSObject {
       if list.isEmpty {
         menu.addItem(withTitle: "No tucked icons", action: nil, keyEquivalent: "")
       }
-      for (i, f) in list.enumerated() {
+      for f in list {
         let item = NSMenuItem(title: f.item.displayName, action: #selector(self.quickOpenChose(_:)), keyEquivalent: "")
         item.target = self
-        item.tag = i
+        item.representedObject = f // not an index: a scan may replace the list while the menu is up
         menu.addItem(item)
       }
       NSApp.activate(ignoringOtherApps: true)
@@ -542,8 +581,7 @@ final class StatusController: NSObject {
   }
 
   @objc private func quickOpenChose(_ sender: NSMenuItem) {
-    guard tucked.indices.contains(sender.tag) else { return }
-    let target = tucked[sender.tag]
+    guard let target = sender.representedObject as? TuckedScanner.Found else { return }
     // Let our menu finish closing before opening theirs.
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { TuckedScanner.press(target) }
   }
@@ -552,7 +590,7 @@ final class StatusController: NSObject {
   /// would use, then rescans.
   func untuck(_ item: BarItem) {
     withFreshScan { [weak self] list in
-      guard let self, let found = list.first(where: { $0.item.pid == item.pid && $0.item.label == item.label }),
+      guard let self, let found = Self.find(item, in: list),
             let arrowFrame = self.arrow.button?.window?.frame,
             let top = NSScreen.screens.first?.frame.maxY else { return }
       let from = CGPoint(x: found.item.frame.midX, y: found.item.frame.midY)
@@ -587,10 +625,8 @@ final class StatusController: NSObject {
     }
   }
 
-  /// tuck://menu, for scripting and testing.
-  func showMenuFromURL() { showMenu() }
-
-  private func showMenu() {
+  /// Also tuck://menu.
+  func showMenu() {
     guard let button = arrow.button else { return }
     onToggleMenu(button)
   }
@@ -599,8 +635,13 @@ final class StatusController: NSObject {
   /// positions from a scan made before collapsing are stale.
   func openTucked(_ target: BarItem) {
     withFreshScan { list in
-      guard let f = list.first(where: { $0.item.pid == target.pid && $0.item.label == target.label }) else { return }
+      guard let f = Self.find(target, in: list) else { return }
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { TuckedScanner.press(f) }
     }
+  }
+
+  /// The same icon in a fresh scan (positions change, pid and label don't).
+  private static func find(_ item: BarItem, in list: [TuckedScanner.Found]) -> TuckedScanner.Found? {
+    list.first { $0.item.pid == item.pid && $0.item.label == item.label }
   }
 }

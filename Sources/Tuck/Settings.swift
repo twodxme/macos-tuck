@@ -233,16 +233,19 @@ struct WindowSnapshot: Equatable {
   var bounds: CGRect
 }
 
-/// True while some app's dropdown hangs from the menu bar: a pop-up menu
-/// (layer 101) anywhere, or any floating panel touching the bar's bottom
-/// edge (status item popovers). The bar's own windows (layers 24/25) and
-/// full-width strips are not dropdowns.
-func dropdownOpen(_ windows: [WindowSnapshot], barHeight: CGFloat, screenWidth: CGFloat) -> Bool {
+/// True while some app's dropdown hangs from a menu bar: a pop-up menu
+/// (layer 101) anywhere, or any floating panel touching the bottom edge of
+/// one of `bars` (status item popovers), one per display, in top-left-origin
+/// points. The bars' own windows (layers 24/25) and full-width strips are
+/// not dropdowns.
+func dropdownOpen(_ windows: [WindowSnapshot], bars: [CGRect]) -> Bool {
   windows.contains { w in
     if w.layer == 101 { return true }
-    guard (3..<1000).contains(w.layer), w.layer != 24, w.layer != 25 else { return false }
-    guard w.bounds.width < screenWidth - 1, w.bounds.height > 10 else { return false }
-    return w.bounds.minY <= barHeight + 8 && w.bounds.maxY > barHeight
+    guard (3..<1000).contains(w.layer), w.layer != 24, w.layer != 25, w.bounds.height > 10 else { return false }
+    return bars.contains { bar in
+      w.bounds.width < bar.width - 1 && w.bounds.minX < bar.maxX && w.bounds.maxX > bar.minX
+        && w.bounds.minY <= bar.maxY + 8 && w.bounds.maxY > bar.maxY
+    }
   }
 }
 

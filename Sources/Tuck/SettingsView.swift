@@ -134,7 +134,7 @@ private struct Sidebar: View {
     }
     .padding(.horizontal, 10)
     .frame(maxHeight: .infinity)
-    .background(Material(.sidebar, state: .followsWindowActiveState))
+    .background(VisualEffect(material: .sidebar, state: .followsWindowActiveState))
   }
 }
 
@@ -396,7 +396,7 @@ private struct AboutPane: View {
       .padding(.top, 8)
 
       VStack(alignment: .leading, spacing: 4) {
-        Text("SCRIPTING").font(.system(size: 11, weight: .semibold)).tracking(0.4).foregroundStyle(Color.accentColor)
+        SectionTitle("Scripting")
         Text("open \"tuck://toggle\"\nexpand · collapse · all · menu · quickopen · settings")
           .font(.system(size: 11, design: .monospaced))
           .foregroundStyle(.secondary)
@@ -576,7 +576,8 @@ final class SettingsWindow {
     }
     model.launchAtLogin = SMAppService.mainApp.status == .enabled
     model.trusted = TuckedScanner.isTrusted
-    if model.s.trackTucked && model.trusted { model.refreshTucked() }
+    // The tucked list shows what the last scan found; a fresh one would
+    // have to un-tuck the bar, so only the Refresh button asks for that.
     NSApp.activate(ignoringOtherApps: true)
     window?.makeKeyAndOrderFront(nil)
   }

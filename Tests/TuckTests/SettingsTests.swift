@@ -119,21 +119,32 @@ import Testing
   }
 
   @Test func dropdownDetection() {
-    let bar: CGFloat = 43.5, width: CGFloat = 2048
+    let bars = [CGRect(x: 0, y: 0, width: 2048, height: 43.5)]
     // Nothing but the menu bar's own strips: closed.
     #expect(!dropdownOpen([WindowSnapshot(layer: 24, bounds: CGRect(x: 0, y: 0, width: 2048, height: 43.5)),
                            WindowSnapshot(layer: 25, bounds: CGRect(x: 1400, y: 0, width: 30, height: 43.5))],
-                          barHeight: bar, screenWidth: width))
+                          bars: bars))
     // A pop-up menu (Tuck's own measured at layer 101, y -30): open.
     #expect(dropdownOpen([WindowSnapshot(layer: 101, bounds: CGRect(x: 1441, y: -30, width: 340, height: 278))],
-                         barHeight: bar, screenWidth: width))
+                         bars: bars))
     // A floating panel hanging from the bar (a status item popover): open.
     #expect(dropdownOpen([WindowSnapshot(layer: 8, bounds: CGRect(x: 1500, y: 44, width: 300, height: 400))],
-                         barHeight: bar, screenWidth: width))
+                         bars: bars))
     // An ordinary window, or a floating one mid-screen: closed.
     #expect(!dropdownOpen([WindowSnapshot(layer: 0, bounds: CGRect(x: 0, y: 44, width: 800, height: 600)),
                            WindowSnapshot(layer: 3, bounds: CGRect(x: 400, y: 400, width: 300, height: 300))],
-                          barHeight: bar, screenWidth: width))
+                          bars: bars))
+  }
+
+  @Test func dropdownOnASecondDisplay() {
+    // A second display below the main one: its menu bar starts at y 1330.
+    let bars = [CGRect(x: 0, y: 0, width: 2048, height: 43.5), CGRect(x: 0, y: 1330, width: 1920, height: 25)]
+    // A popover hanging from that display's bar: open.
+    #expect(dropdownOpen([WindowSnapshot(layer: 8, bounds: CGRect(x: 1500, y: 1356, width: 300, height: 400))],
+                         bars: bars))
+    // A floating window in the middle of that display: closed.
+    #expect(!dropdownOpen([WindowSnapshot(layer: 3, bounds: CGRect(x: 600, y: 1800, width: 300, height: 300))],
+                          bars: bars))
   }
 
   @Test func tuckedAreThoseLeftOfTheDivider() {
