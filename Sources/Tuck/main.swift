@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     panelModel.showingAll = status.mode == .all
     panelModel.hasHiddenSection = status.hasHiddenSection
     panelModel.tucked = status.tucked.map(\.item)
+    panel?.refresh()
   }
 
   private func registerHotKeys(_ s: TuckSettings) {

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Views the menu panel and Settings share.
+/// Shared bits for the Settings window.
 
 /// Section title: small, uppercase, accent-colored, with an optional value
 /// on the right.
@@ -27,12 +27,19 @@ struct SectionTitle: View {
   }
 }
 
+extension BarItem {
+  /// The owning app's icon; nil for system items, which have no useful one.
+  var icon: NSImage? {
+    let app = NSRunningApplication(processIdentifier: pid)
+    return app?.bundleIdentifier == "com.apple.MenuBarAgent" ? nil : app?.icon
+  }
+}
+
 /// A menu bar item's app icon, or a generic one for system items.
 struct BarItemIcon: View {
-  let pid: pid_t
+  let item: BarItem
   var body: some View {
-    let app = NSRunningApplication(processIdentifier: pid)
-    if let icon = app?.icon, app?.bundleIdentifier != "com.apple.MenuBarAgent" {
+    if let icon = item.icon {
       Image(nsImage: icon).resizable().interpolation(.high).frame(width: 16, height: 16)
     } else {
       Image(systemName: "menubar.rectangle").foregroundStyle(.secondary).frame(width: 16, height: 16)

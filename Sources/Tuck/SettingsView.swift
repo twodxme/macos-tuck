@@ -311,7 +311,7 @@ private struct TuckedPane: View {
           }
           ForEach(Array(model.tucked.enumerated()), id: \.offset) { _, item in
             HStack(spacing: 8) {
-              BarItemIcon(pid: item.pid)
+              BarItemIcon(item: item)
               Text(item.displayName).lineLimit(1).truncationMode(.tail)
               Spacer()
               Button("Untuck") { model.untuck(item) }

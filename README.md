@@ -26,7 +26,7 @@ Tuck the menu bar icons you rarely need behind a divider. Click the arrow, press
 
 ![Tuck showing everything: one more icon appears left of a dashed divider](docs/all.png)
 
-Tiny and asleep almost all the time: 0% CPU and no wakeups while tucked away, about 25 MB of memory (35 MB once you've opened its menu or Settings), a 2 MB app. Never touches the network, collects nothing, and needs no permissions unless you opt in. Works on macOS 13 and later, tested on macOS 27.
+Tiny and asleep almost all the time: 0% CPU and no wakeups while tucked away, about 25 MB of memory (about 30 MB once you've used its menu), a 2 MB app. Never touches the network, collects nothing, and needs no permissions unless you opt in. Works on macOS 13 and later, tested on macOS 27.
 
 ## Install
 
@@ -61,7 +61,7 @@ Tuck sits in your menu bar all day, so here is exactly what it does and doesn't 
 - **No network.** Tuck never connects to anything: no analytics, telemetry, crash reporting, update checks, or accounts. The only web addresses in the code are the *GitHub* and *Report an Issue* buttons in Settings → About, which open your browser when you click them. Check: `grep -rn "http" Sources/`.
 - **No permissions by default.** Accessibility is asked for only if you turn on icon tracking, and only to see and move menu bar icons. See [Permissions](#permissions).
 - **Writes only its own settings,** to `com.twodxme.tuck` in your user defaults. One exception, only if you choose *Compact* or *Tight* icon spacing: the two macOS-wide keys `NSStatusItemSpacing` and `NSStatusItemSelectionPadding`. Setting spacing back to *macOS default* removes them.
-- **Small enough to read.** About 2,200 lines of Swift with no third-party dependencies, only Apple's frameworks. MIT licensed.
+- **Small enough to read.** About 2,300 lines of Swift with no third-party dependencies, only Apple's frameworks. MIT licensed.
 - **Releases are built in public, and you can prove it.** Each release is built by [GitHub Actions](.github/workflows/release.yml) from the tagged commit, after the tests pass. Since 1.2.2 every `Tuck.zip` carries a signed [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (Sigstore), so you can check that a download came from this repository's workflow and which commit it was built from, and a SHA-256 checksum. Homebrew checks the checksum for you; for a manual download:
 
   ```bash
