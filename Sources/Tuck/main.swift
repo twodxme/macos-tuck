@@ -5,6 +5,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var status: StatusController!
   private var settingsWindow: SettingsWindow!
   private var model: SettingsModel!
+  private var panel: MenuPanel!
+  private let panelModel = PanelModel()
   private let hotKeys = HotKeys()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
@@ -31,12 +33,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     status.onTuckedChange = { [weak self] items in self?.model.tucked = items }
     settingsWindow = SettingsWindow(model: model)
     status.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
+
+    panel = MenuPanel(model: panelModel, settings: model)
+    panelModel.toggle = { [weak self] in self?.status.toggle() }
+    panelModel.toggleAll = { [weak self] in self?.status.toggleAll() }
+    panelModel.openTucked = { [weak self] item in self?.status.openTucked(item) }
+    panelModel.openSettings = { [weak self] in self?.settingsWindow.show() }
+    panelModel.showHelp = { [weak self] in self?.status.showHelp() }
+    status.onToggleMenu = { [weak self] button in
+      guard let self else { return }
+      self.syncPanel()
+      self.panel.toggle(under: button)
+    }
+    status.isMenuShown = { [weak self] in self?.panel.isShown ?? false }
+    status.onStateChange = { [weak self] in self?.syncPanel() }
+    syncPanel()
     registerHotKeys(settings)
 
     // Scriptable like the Omarchy version: `open "tuck://toggle"` and friends.
     NSAppleEventManager.shared().setEventHandler(
       self, andSelector: #selector(handleURL(_:withReply:)),
       forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
+  }
+
+  private func syncPanel() {
+    panelModel.expanded = status.expanded
+    panelModel.showingAll = status.mode == .all
+    panelModel.hasHiddenSection = status.hasHiddenSection
+    panelModel.tucked = status.tucked.map(\.item)
   }
 
   private func registerHotKeys(_ s: TuckSettings) {
@@ -47,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       pressed: { [weak self] in self?.status.quickOpen() }))
   }
 
-  /// tuck://toggle, expand, collapse, all, quickopen, settings
+  /// tuck://toggle, expand, collapse, all, quickopen, settings, menu
   @objc private func handleURL(_ event: NSAppleEventDescriptor, withReply reply: NSAppleEventDescriptor) {
     guard let s = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
           let host = URL(string: s)?.host else { return }
@@ -58,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     case "all": status.toggleAll()
     case "quickopen": status.quickOpen()
     case "settings": settingsWindow.show()
+    case "menu": status.showMenuFromURL()
     default: break
     }
   }

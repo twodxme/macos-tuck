@@ -52,38 +52,149 @@ final class SettingsModel: ObservableObject {
   }
 }
 
+
+// MARK: - settings window
+
+enum SettingsPane: String, CaseIterable, Identifiable {
+  case general, hiding, tucked, appearance, about
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .general: return "General"
+    case .hiding: return "Hiding"
+    case .tucked: return "Tucked Icons"
+    case .appearance: return "Appearance"
+    case .about: return "About"
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .general: return "gearshape"
+    case .hiding: return "eye.slash"
+    case .tucked: return "list.bullet"
+    case .appearance: return "paintbrush"
+    case .about: return "info.circle"
+    }
+  }
+}
+
 struct SettingsView: View {
+  @ObservedObject var model: SettingsModel
+  @State private var pane: SettingsPane = .general
+
+  var body: some View {
+    HStack(spacing: 0) {
+      Sidebar(pane: $pane)
+        .frame(width: 184)
+      Divider()
+      Group {
+        switch pane {
+        case .general: GeneralPane(model: model)
+        case .hiding: HidingPane(model: model)
+        case .tucked: TuckedPane(model: model)
+        case .appearance: AppearancePane(model: model)
+        case .about: AboutPane()
+        }
+      }
+      .formStyle(.grouped)
+      .padding(.top, 22) // clear of the transparent title bar
+      .frame(width: 660 - 185, alignment: .top)
+      .frame(maxHeight: .infinity, alignment: .top)
+      .background(Color(nsColor: .windowBackgroundColor))
+    }
+    .frame(width: 660, height: 500)
+    .ignoresSafeArea()
+  }
+}
+
+// MARK: sidebar
+
+private struct Sidebar: View {
+  @Binding var pane: SettingsPane
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      HStack(spacing: 10) {
+        TuckLogo(size: 30)
+        VStack(alignment: .leading, spacing: 1) {
+          Text("Tuck").font(.system(size: 14, weight: .semibold))
+          Text("Version \(appVersion)").font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+      }
+      .padding(.horizontal, 10)
+      .padding(.top, 46)
+      .padding(.bottom, 14)
+
+      ForEach(SettingsPane.allCases) { p in
+        SidebarRow(pane: p, selected: pane == p) { pane = p }
+      }
+      Spacer()
+    }
+    .padding(.horizontal, 10)
+    .frame(maxHeight: .infinity)
+    .background(SidebarMaterial())
+  }
+}
+
+private struct SidebarRow: View {
+  let pane: SettingsPane
+  let selected: Bool
+  let action: () -> Void
+  @State private var hovering = false
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 9) {
+        Image(systemName: pane.symbol)
+          .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(selected ? Color.white : Color.accentColor)
+          .frame(width: 22, height: 22)
+          .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(selected ? Color.accentColor : Color.accentColor.opacity(0.14)))
+        Text(pane.title).font(.system(size: 13))
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 6)
+      .frame(height: 32)
+      .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+        .fill(Color.primary.opacity(selected ? 0.1 : hovering ? 0.05 : 0)))
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    // The selection highlight already shows where you are; a focus ring on
+    // top of it just looks like a glitch.
+    .focusable(false)
+    .onHover { hovering = $0 }
+    .accessibilityAddTraits(selected ? [.isSelected] : [])
+  }
+}
+
+// MARK: panes
+
+private struct GeneralPane: View {
   @ObservedObject var model: SettingsModel
 
   var body: some View {
     Form {
-      Section("Behavior") {
+      Section {
         Picker("Open on", selection: $model.s.openOn) {
           ForEach(OpenOn.allCases) { Text($0.label).tag($0) }
         }
         .pickerStyle(.segmented)
-
-        Toggle("Tuck away automatically", isOn: $model.s.autoHide)
-          .disabled(model.s.openOn == .hover)
-        if model.s.openOn == .click && model.s.autoHide {
-          Stepper(value: $model.s.autoHideSeconds, in: TuckSettings.secondsRange) {
-            Text("After \(model.s.autoHideSeconds) second\(model.s.autoHideSeconds == 1 ? "" : "s")")
-          }
-        }
-        Toggle("Tuck away when I switch apps", isOn: $model.s.collapseOnAppSwitch)
-          .disabled(model.s.openOn == .hover)
-        Toggle("Open while ⌘-dragging menu bar icons", isOn: $model.s.openWhileDragging)
-        Text(model.s.openOn == .hover
-             ? "In hover mode it closes once the pointer leaves the menu bar."
-             : "Never closes under the pointer or while a menu is open.")
-          .font(.caption).foregroundStyle(.secondary)
-
-        Toggle("Start open", isOn: $model.s.startOpen)
+        .frame(maxWidth: 260, alignment: .trailing)
         Picker("Shortcut", selection: $model.s.hotKey) {
           ForEach(HotKeyPreset.allCases) { Text($0.label).tag($0) }
         }
-        Text("Tap to show or hide. Hold to peek: icons tuck away again when you let go.")
-          .font(.caption).foregroundStyle(.secondary)
+      } header: {
+        PaneHeader("Opening")
+      } footer: {
+        Caption("Tap the shortcut to show or hide. Hold it to peek: icons tuck away again when you let go.")
+      }
+
+      Section {
+        Toggle("Start open", isOn: $model.s.startOpen)
         Toggle("Launch at login", isOn: Binding(
           get: { model.launchAtLogin },
           set: { model.setLaunchAtLogin($0) }
@@ -91,77 +202,372 @@ struct SettingsView: View {
         if let err = model.loginError {
           Text(err).font(.caption).foregroundStyle(.red)
         }
+      } header: {
+        PaneHeader("Startup")
+      }
+    }
+  }
+}
+
+private struct HidingPane: View {
+  @ObservedObject var model: SettingsModel
+  private var hover: Bool { model.s.openOn == .hover }
+
+  var body: some View {
+    Form {
+      Section {
+        BarDiagram(alwaysHidden: model.s.alwaysHidden)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 4)
+      } header: {
+        PaneHeader("How it works")
+      } footer: {
+        Caption("Hold ⌘ and drag a menu bar icon left of Tuck's divider ( | ) to tuck it, right of the arrow to bring it back.")
       }
 
-      Section("Always hidden") {
+      Section {
+        Toggle("Tuck away automatically", isOn: $model.s.autoHide)
+          .disabled(hover)
+        if model.s.autoHide && !hover {
+          Stepper(value: $model.s.autoHideSeconds, in: TuckSettings.secondsRange) {
+            HStack {
+              Text("After")
+              Spacer()
+              Text("\(model.s.autoHideSeconds) second\(model.s.autoHideSeconds == 1 ? "" : "s")")
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
+        Toggle("Tuck away when I switch apps", isOn: $model.s.collapseOnAppSwitch)
+          .disabled(hover)
+        Toggle("Open while ⌘-dragging menu bar icons", isOn: $model.s.openWhileDragging)
+      } header: {
+        PaneHeader("Tucking away")
+      } footer: {
+        Caption(hover
+                ? "In hover mode Tuck closes once the pointer leaves the menu bar."
+                : "Tuck never closes under the pointer or while a menu is open.")
+      }
+
+      Section {
         Toggle("Add an always-hidden section", isOn: $model.s.alwaysHidden)
-        Text("Icons left of the dashed divider stay hidden even when Tuck is open. ⌥-click the arrow to show them.")
-          .font(.caption).foregroundStyle(.secondary)
+      } header: {
+        PaneHeader("Always hidden")
+      } footer: {
+        Caption("Icons left of the dashed divider stay hidden even when Tuck is open. ⌥-click the arrow to show them.")
       }
+    }
+  }
+}
 
-      Section("Tucked icons") {
+private struct TuckedPane: View {
+  @ObservedObject var model: SettingsModel
+
+  var body: some View {
+    Form {
+      Section {
         Toggle("Count and list tucked icons", isOn: $model.s.trackTucked)
         if model.s.trackTucked {
-          if !model.trusted {
-            Text("Needs Accessibility permission, which also lets Tuck move icons for you.")
-              .font(.caption).foregroundStyle(.secondary)
-            Button("Open Accessibility Settings…") {
-              TuckedScanner.requestTrust()
-              SettingsModel.openSystemSettings("com.apple.preference.security?Privacy_Accessibility")
-            }
-          } else {
-            Toggle("Show count on the arrow", isOn: $model.s.showCount)
-            Picker("Quick open shortcut", selection: $model.s.quickOpenHotKey) {
-              ForEach(HotKeyPreset.allCases) { Text($0.label).tag($0) }
-            }
-            if model.s.quickOpenHotKey != .none && model.s.quickOpenHotKey == model.s.hotKey {
-              Text("Same as the main shortcut, so it's off.").font(.caption).foregroundStyle(.red)
-            }
-            if model.tucked.isEmpty {
-              Text("Nothing tucked, or Tuck hasn't looked yet.").font(.callout).foregroundStyle(.secondary)
-            }
-            ForEach(Array(model.tucked.enumerated()), id: \.offset) { _, item in
-              HStack {
-                Text(item.displayName).lineLimit(1)
-                Spacer()
-                Button("Untuck") { model.untuck(item) }
+          HStack(spacing: 8) {
+            Circle()
+              .fill(model.trusted ? Color.green : Color.orange)
+              .frame(width: 8, height: 8)
+            Text(model.trusted ? "Accessibility allowed" : "Needs Accessibility permission")
+            Spacer()
+            if !model.trusted {
+              Button("Open Settings…") {
+                TuckedScanner.requestTrust()
+                SettingsModel.openSystemSettings("com.apple.preference.security?Privacy_Accessibility")
               }
+              .controlSize(.small)
             }
-            Button("Refresh List") { model.refreshTucked() }
           }
+          .accessibilityElement(children: .combine)
         }
-        Text("Hold ⌘ and drag a menu bar icon left of Tuck's divider ( | ) to tuck it, right of the arrow to bring it back.")
-          .font(.caption).foregroundStyle(.secondary)
+      } header: {
+        PaneHeader("Tracking")
+      } footer: {
+        Caption("Accessibility lets Tuck see which icons are tucked and move them for you. Nothing leaves your Mac.")
       }
 
-      Section("Look") {
-        Picker("Arrow", selection: $model.s.iconStyle) {
-          ForEach(IconStyle.allCases) { style in
-            Label(style.label, systemImage: style.symbols.left).tag(style)
+      if model.s.trackTucked && model.trusted {
+        Section {
+          Toggle("Show count on the arrow", isOn: $model.s.showCount)
+          Picker("Quick open shortcut", selection: $model.s.quickOpenHotKey) {
+            ForEach(HotKeyPreset.allCases) { Text($0.label).tag($0) }
           }
-        }
-        Toggle("Show divider while open", isOn: $model.s.showDivider)
-        Toggle("Tooltip", isOn: $model.s.showTooltip)
-        Picker("Menu bar icon spacing", selection: $model.s.spacing) {
-          ForEach(IconSpacing.allCases) { Text($0.label).tag($0) }
-        }
-        Text("Changes spacing for every app's icon, so more fit beside the notch. Apps pick it up when they relaunch; log out to apply it everywhere.")
-          .font(.caption).foregroundStyle(.secondary)
-        HStack {
-          Text("The fade when icons tuck is drawn by macOS.")
-            .font(.caption).foregroundStyle(.secondary)
-          Spacer()
-          Button("Reduce Motion…") {
-            SettingsModel.openSystemSettings("com.apple.preference.universalaccess?Seeing_Display")
+          if model.s.quickOpenHotKey != .none && model.s.quickOpenHotKey == model.s.hotKey {
+            Text("Same as the main shortcut, so it's off.").font(.caption).foregroundStyle(.red)
           }
-          .controlSize(.small)
+        } header: {
+          PaneHeader("Options")
+        }
+
+        Section {
+          if model.tucked.isEmpty {
+            Text("Nothing tucked, or Tuck hasn't looked yet.")
+              .foregroundStyle(.secondary)
+          }
+          ForEach(Array(model.tucked.enumerated()), id: \.offset) { _, item in
+            HStack(spacing: 8) {
+              BarItemIcon(pid: item.pid)
+              Text(item.displayName).lineLimit(1).truncationMode(.tail)
+              Spacer()
+              Button("Untuck") { model.untuck(item) }
+                .controlSize(.small)
+            }
+          }
+        } header: {
+          HStack {
+            PaneHeader("Tucked now")
+            Spacer()
+            Button {
+              model.refreshTucked()
+            } label: {
+              Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.borderless)
+            .help("Refresh the list")
+            .accessibilityLabel("Refresh the list")
+          }
         }
       }
     }
-    .formStyle(.grouped)
-    .frame(width: 420)
-    .fixedSize(horizontal: false, vertical: true)
   }
+}
+
+private struct AppearancePane: View {
+  @ObservedObject var model: SettingsModel
+
+  var body: some View {
+    Form {
+      Section {
+        HStack(spacing: 8) {
+          ForEach(IconStyle.allCases) { style in
+            ArrowTile(style: style, selected: model.s.iconStyle == style) { model.s.iconStyle = style }
+          }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 2)
+      } header: {
+        PaneHeader("Arrow")
+      }
+
+      Section {
+        Toggle("Show divider while open", isOn: $model.s.showDivider)
+        Toggle("Show tooltip on the arrow", isOn: $model.s.showTooltip)
+      } header: {
+        PaneHeader("Menu bar")
+      }
+
+      Section {
+        Picker("Icon spacing", selection: $model.s.spacing) {
+          ForEach(IconSpacing.allCases) { Text($0.label).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: .infinity)
+      } header: {
+        PaneHeader("Spacing")
+      } footer: {
+        Caption("Changes spacing for every app's icon, so more fit beside the notch. Apps pick it up when they relaunch; log out to apply it everywhere.")
+      }
+    }
+  }
+}
+
+private struct AboutPane: View {
+  var body: some View {
+    VStack(spacing: 10) {
+      TuckLogo(size: 64)
+        .padding(.top, 36)
+      Text("Tuck").font(.system(size: 22, weight: .semibold))
+      Text("Version \(appVersion)").foregroundStyle(.secondary)
+      Text("Tucks menu bar icons away behind an arrow.\nFree and open source, MIT License.")
+        .multilineTextAlignment(.center)
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
+        .padding(.top, 4)
+      HStack(spacing: 10) {
+        Button("GitHub") { open("https://github.com/twodxme/macos-tuck") }
+        Button("Report an Issue") { open("https://github.com/twodxme/macos-tuck/issues") }
+      }
+      .padding(.top, 8)
+
+      VStack(alignment: .leading, spacing: 4) {
+        Text("SCRIPTING").font(.system(size: 11, weight: .semibold)).tracking(0.4).foregroundStyle(Color.accentColor)
+        Text("open \"tuck://toggle\"\nexpand · collapse · all · menu · quickopen · settings")
+          .font(.system(size: 11, design: .monospaced))
+          .foregroundStyle(.secondary)
+          .lineSpacing(3)
+          .fixedSize(horizontal: false, vertical: true)
+          .textSelection(.enabled)
+      }
+      .padding(12)
+      .frame(maxWidth: 400, alignment: .leading)
+      .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.primary.opacity(0.05)))
+      .padding(.top, 18)
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  private func open(_ s: String) {
+    if let url = URL(string: s) { NSWorkspace.shared.open(url) }
+  }
+}
+
+// MARK: building blocks
+
+private var appVersion: String {
+  Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+}
+
+/// Section title in the panel's style: small, uppercase, accent-colored.
+private struct PaneHeader: View {
+  let text: String
+  init(_ text: String) { self.text = text }
+  var body: some View {
+    Text(text.uppercased())
+      .font(.system(size: 11, weight: .semibold))
+      .tracking(0.4)
+      .foregroundStyle(Color.accentColor)
+  }
+}
+
+private struct Caption: View {
+  let text: String
+  init(_ text: String) { self.text = text }
+  var body: some View {
+    Text(text).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+private struct TuckLogo: View {
+  let size: CGFloat
+  var body: some View {
+    Image(systemName: "chevron.left")
+      .font(.system(size: size * 0.42, weight: .bold))
+      .foregroundStyle(.white)
+      .frame(width: size, height: size)
+      .background(RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
+        .fill(LinearGradient(colors: [Color.accentColor, Color.accentColor.opacity(0.7)],
+                             startPoint: .top, endPoint: .bottom)))
+      .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
+      .accessibilityHidden(true)
+  }
+}
+
+private struct ArrowTile: View {
+  let style: IconStyle
+  let selected: Bool
+  let action: () -> Void
+  @State private var hovering = false
+
+  var body: some View {
+    Button(action: action) {
+      VStack(spacing: 6) {
+        Image(systemName: style.symbols.left)
+          .font(.system(size: 15, weight: .semibold))
+          .frame(height: 22)
+        Text(style == .double ? "Double" : style.label)
+          .font(.system(size: 10))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .foregroundStyle(.secondary)
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: 58)
+      .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(selected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(hovering ? 0.07 : 0.04)))
+      .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 0.5))
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .onHover { hovering = $0 }
+    .accessibilityLabel(style.label)
+    .accessibilityAddTraits(selected ? [.isSelected] : [])
+  }
+}
+
+/// A sketch of the menu bar sections, so the divider trick explains itself.
+private struct BarDiagram: View {
+  let alwaysHidden: Bool
+
+  var body: some View {
+    HStack(spacing: 6) {
+      if alwaysHidden {
+        Zone(label: "Always hidden", dots: 2, faded: true)
+        Glyph("⋮")
+      }
+      Zone(label: "Tucked", dots: 3, faded: false)
+      Glyph("|")
+      Image(systemName: "chevron.left")
+        .font(.system(size: 11, weight: .bold))
+        .foregroundStyle(Color.accentColor)
+        .frame(width: 22, height: 22)
+        .background(RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.15)))
+      Zone(label: "Always shown", dots: 3, faded: false)
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(alwaysHidden
+      ? "Menu bar, left to right: always-hidden icons, dashed divider, tucked icons, divider, Tuck's arrow, always-shown icons."
+      : "Menu bar, left to right: tucked icons, divider, Tuck's arrow, always-shown icons.")
+  }
+
+  private struct Zone: View {
+    let label: String
+    let dots: Int
+    let faded: Bool
+    var body: some View {
+      VStack(spacing: 5) {
+        HStack(spacing: 5) {
+          ForEach(0..<dots, id: \.self) { _ in
+            RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(faded ? 0.22 : 0.5)).frame(width: 12, height: 12)
+          }
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 22)
+        .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.06)))
+        Text(label).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+      }
+    }
+  }
+
+  private struct Glyph: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+      Text(text).font(.system(size: 14, weight: .semibold)).foregroundStyle(.secondary)
+        .frame(height: 22)
+        .padding(.bottom, 15)
+    }
+  }
+}
+
+/// A tucked item's app icon, or a generic one for system items.
+private struct BarItemIcon: View {
+  let pid: pid_t
+  var body: some View {
+    let app = NSRunningApplication(processIdentifier: pid)
+    if let icon = app?.icon, app?.bundleIdentifier != "com.apple.MenuBarAgent" {
+      Image(nsImage: icon).resizable().interpolation(.high).frame(width: 16, height: 16)
+    } else {
+      Image(systemName: "menubar.rectangle").foregroundStyle(.secondary).frame(width: 16, height: 16)
+    }
+  }
+}
+
+private struct SidebarMaterial: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSVisualEffectView {
+    let v = NSVisualEffectView()
+    v.material = .sidebar
+    v.blendingMode = .behindWindow
+    v.state = .followsWindowActiveState
+    return v
+  }
+  func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 @MainActor
@@ -173,10 +579,19 @@ final class SettingsWindow {
 
   func show() {
     if window == nil {
-      let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
+      let host = NSHostingController(rootView: SettingsView(model: model))
+      // Fixed size: left to itself the hosting controller adds the title
+      // bar's height under the full-size content view.
+      host.sizingOptions = []
+      let w = NSWindow(contentViewController: host)
       w.title = "Tuck Settings"
-      w.styleMask = [.titled, .closable]
+      // The sidebar runs up under the traffic lights.
+      w.styleMask = [.titled, .closable, .fullSizeContentView]
+      w.titlebarAppearsTransparent = true
+      w.titleVisibility = .hidden
+      w.isMovableByWindowBackground = true
       w.isReleasedWhenClosed = false
+      w.setContentSize(NSSize(width: 660, height: 500))
       w.center()
       window = w
       // Coming back from System Settings after granting Accessibility.

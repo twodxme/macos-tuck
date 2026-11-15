@@ -18,7 +18,7 @@ private let log = Logger(subsystem: "com.twodxme.tuck", category: "status")
 /// open (auto-hide, hover watch); listeners are notification- or
 /// event-driven and installed only in the state that needs them.
 @MainActor
-final class StatusController: NSObject, NSMenuDelegate {
+final class StatusController: NSObject {
   enum Mode { case collapsed, open, all }
 
   private let arrow: NSStatusItem
@@ -44,6 +44,12 @@ final class StatusController: NSObject, NSMenuDelegate {
 
   var settings: TuckSettings { didSet { apply(old: oldValue) } }
   var onOpenSettings: () -> Void = {}
+  /// Tuck's menu panel: shown/hidden under the arrow, and whether it's up.
+  var onToggleMenu: (NSStatusBarButton) -> Void = { _ in }
+  var isMenuShown: () -> Bool = { false }
+  /// Mode or tucked list changed (the panel mirrors both).
+  var onStateChange: () -> Void = {}
+  var hasHiddenSection: Bool { hiddenDivider != nil }
 
   private static let layoutOKKey = "layoutOK"
 
@@ -193,6 +199,7 @@ final class StatusController: NSObject, NSMenuDelegate {
       watchAppSwitches(false)
       watchDrags(true)
     }
+    onStateChange()
   }
 
   /// How far a divider stretches, for the screen the items are on.
@@ -497,6 +504,7 @@ final class StatusController: NSObject, NSMenuDelegate {
     tucked = list
     refresh()
     onTuckedChange(list.map(\.item))
+    onStateChange()
   }
 
   /// Open, scan, then hand over the fresh list.
@@ -570,58 +578,33 @@ final class StatusController: NSObject, NSMenuDelegate {
       if flags.contains(.control) { showMenu() }
     case .leftMouseDown:
       if flags.contains(.control) { return }
+      // A click on the arrow while the panel is up just closes it, as with
+      // any menu.
+      if isMenuShown() { showMenu(); return }
       flags.contains(.option) ? toggleAll() : toggle()
     default:
       break
     }
   }
 
+  /// tuck://menu, for scripting and testing.
+  func showMenuFromURL() { showMenu() }
+
   private func showMenu() {
-    let menu = NSMenu()
-    menu.delegate = self
-    menu.addItem(withTitle: expanded ? "Tuck Away" : "Show Tucked Icons", action: #selector(menuToggle), keyEquivalent: "").target = self
-    if hiddenDivider != nil {
-      menu.addItem(withTitle: mode == .all ? "Hide Hidden Icons" : "Show Hidden Icons Too", action: #selector(menuToggleAll), keyEquivalent: "").target = self
-    }
-    if settings.trackTucked, !tucked.isEmpty {
-      let open = NSMenuItem(title: "Open Tucked Icon", action: nil, keyEquivalent: "")
-      let sub = NSMenu()
-      for (i, f) in tucked.enumerated() {
-        let item = NSMenuItem(title: f.item.displayName, action: #selector(menuOpenTucked(_:)), keyEquivalent: "")
-        item.target = self
-        item.tag = i
-        sub.addItem(item)
-      }
-      open.submenu = sub
-      menu.addItem(open)
-    }
-    menu.addItem(.separator())
-    menu.addItem(withTitle: "Settings…", action: #selector(menuSettings), keyEquivalent: ",").target = self
-    menu.addItem(withTitle: "How to Tuck Icons", action: #selector(menuHelp), keyEquivalent: "").target = self
-    menu.addItem(.separator())
-    menu.addItem(withTitle: "Quit Tuck", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-    arrow.menu = menu
-    arrow.button?.performClick(nil)
+    guard let button = arrow.button else { return }
+    onToggleMenu(button)
   }
 
-  // Detach the menu again so the next left-click toggles instead.
-  nonisolated func menuDidClose(_ menu: NSMenu) {
-    Task { @MainActor in self.arrow.menu = nil }
-  }
-
-  @objc private func menuToggle() { toggle() }
-  @objc private func menuToggleAll() { toggleAll() }
-  @objc private func menuSettings() { onOpenSettings() }
-  @objc private func menuOpenTucked(_ sender: NSMenuItem) {
-    guard tucked.indices.contains(sender.tag) else { return }
-    let target = tucked[sender.tag].item
-    // Re-find it once open: positions from a collapsed-era scan are stale.
+  /// Opens a tucked icon's own menu. It's re-found once Tuck is open:
+  /// positions from a scan made before collapsing are stale.
+  func openTucked(_ target: BarItem) {
     withFreshScan { list in
       guard let f = list.first(where: { $0.item.pid == target.pid && $0.item.label == target.label }) else { return }
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { TuckedScanner.press(f) }
     }
   }
-  @objc private func menuHelp() {
+
+  func showHelp() {
     let alert = NSAlert()
     alert.messageText = "Tucking icons"
     var text = "Hold ⌘ and drag any menu bar icon to the left of Tuck's divider ( | ) to tuck it away. Drag it back to the right of the arrow to keep it visible.\n\nClick the arrow or press the shortcut to show or hide tucked icons. Hold the shortcut to peek."

@@ -42,7 +42,13 @@ cp -R build/Tuck.app /Applications/
 1. Hold **⌘** and drag the menu bar icons you want out of the way to the **left of Tuck's divider** ( | ). Drag them right of the arrow to bring them back.
 2. **Click** the arrow to show or hide them, or press **⌥⌘\\** from anywhere.
 3. **Hold** the shortcut to peek: the icons tuck away again when you let go.
-4. **Right-click** the arrow for Settings, help, and Quit.
+4. **Right-click** (or ⌃-click) the arrow for Tuck's menu.
+
+### The menu
+
+Right-click the arrow and Tuck's menu slides down out of the menu bar like a drawer: show or tuck away with one click, flip the everyday options, open a tucked icon, or get to Settings, help, and Quit. Escape, a click elsewhere, or another click on the arrow closes it.
+
+<img src="docs/menu.png" alt="Tuck's menu: a dark panel with a Tuck card holding a Show Tucked Icons button and the shortcut, an Options card with Auto-hide, Hide on app switch and Always-hidden section switches, and Settings, help and Quit buttons" width="316">
 
 Tuck folds itself away after a few seconds, or as soon as you switch to another app, but never under the pointer or while a menu is open.
 
@@ -56,7 +62,7 @@ Turn on **Settings → Count and list tucked icons** (it asks for Accessibility;
 
 - show **how many icons are tucked**, next to the arrow
 - list them in Settings with an **Untuck** button each, which moves the icon right of the arrow for you
-- open any of them from **Open Tucked Icon** in the right-click menu
+- list them in the menu too, with app icons: click one to open it
 - **quick open**: a shortcut that lists tucked icons under the arrow. Type a few letters, press Return, and that icon's menu opens without untucking anything.
 
 ![Quick open: a menu under the arrow lists the tucked icons by name](docs/quick-open.png)
@@ -71,12 +77,18 @@ open tuck://expand      # show
 open tuck://collapse    # hide
 open tuck://all         # show the always-hidden section too, or back
 open tuck://quickopen   # the quick open menu
+open tuck://menu        # Tuck's menu
 open tuck://settings
 ```
 
 ## Settings
 
-<img src="docs/settings.png" alt="Tuck's settings window: Behavior, Always hidden, Tucked icons and Look sections" width="320" align="right">
+Settings has five sections in a sidebar: General, Hiding, Tucked Icons, Appearance, and About. Hiding sketches how the menu bar is split up, so the divider trick explains itself.
+
+<p>
+  <img src="docs/settings.png" alt="Tuck's Settings, Hiding section: a sketch of the menu bar sections, then the tuck-away options and the always-hidden switch" width="49%">
+  <img src="docs/settings-appearance.png" alt="Tuck's Settings, Appearance section: arrow styles as tiles, divider and tooltip switches, and icon spacing" width="49%">
+</p>
 
 | Setting | Default | |
 |---|---|---|
@@ -93,10 +105,8 @@ open tuck://settings
 | **Quick open shortcut** | none | Same choices as the main shortcut; ignored if they clash. |
 | **Arrow** | Chevron | Arrow, Triangle, Double chevron, Dots. |
 | **Show divider while open** | on | |
-| **Tooltip** | on | |
+| **Show tooltip on the arrow** | on | |
 | **Menu bar icon spacing** | macOS default | *Compact* or *Tight* fit more icons beside the notch. Changes every app's spacing; apps pick it up when they relaunch, all of them after you log out. |
-
-<br clear="right">
 
 Settings live in `com.twodxme.tuck` defaults, so `defaults write com.twodxme.tuck autoHideSeconds -int 30` works too (restart Tuck after). Values Tuck doesn't understand fall back to the default.
 
@@ -121,7 +131,7 @@ Tuck is built to disappear:
 - **Accessibility scans run only while open**, in the background, asking apps in parallel with a short timeout so a frozen app can't stall them (~0.3 s).
 - **Small build**: optimized for size and stripped; the universal binary is about 0.3 MB.
 
-The short fade as icons tuck and untuck is drawn by macOS, not Tuck; Settings has a shortcut to **Reduce Motion** if you'd like to try it.
+The short fade as icons tuck and untuck is drawn by macOS, not Tuck. Tuck's own work takes about 8 ms; the rest (roughly a fifth of a second before macOS redraws, then its fade) happens in the system menu bar process and can't be shortened by an app.
 
 ## How it works
 
