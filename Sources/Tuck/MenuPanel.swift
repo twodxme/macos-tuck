@@ -144,7 +144,7 @@ struct PanelRoot: View {
       .frame(width: MenuPanel.width)
       .background(
         ZStack {
-          VisualEffect()
+          Material(.menu)
           // Denser than a stock menu, so busy windows behind don't show through.
           Color(nsColor: .windowBackgroundColor).opacity(0.55)
         }
@@ -183,7 +183,7 @@ private struct PanelContent: View {
 
   private var header: some View {
     Card {
-      CardTitle("Tuck", value: statusText)
+      SectionTitle("Tuck", value: statusText)
       Button {
         model.toggle()
         close()
@@ -236,7 +236,7 @@ private struct PanelContent: View {
 
   private var tuckedCard: some View {
     Card {
-      CardTitle("Tucked", value: model.tucked.isEmpty ? nil : "\(model.tucked.count)")
+      SectionTitle("Tucked", value: model.tucked.isEmpty ? nil : "\(model.tucked.count)")
       if !TuckedScanner.isTrusted {
         Button {
           TuckedScanner.requestTrust()
@@ -259,7 +259,7 @@ private struct PanelContent: View {
               model.openTucked(item)
             } label: {
               HStack(spacing: 8) {
-                AppIcon(pid: item.pid)
+                BarItemIcon(pid: item.pid)
                 Text(item.displayName)
                   .font(.system(size: 12))
                   .lineLimit(1)
@@ -280,7 +280,7 @@ private struct PanelContent: View {
 
   private var optionsCard: some View {
     Card {
-      CardTitle("Options")
+      SectionTitle("Options")
       OptionRow(title: "Auto-hide", detail: settings.s.autoHide ? "after \(settings.s.autoHideSeconds)s" : nil,
                 isOn: $settings.s.autoHide)
       OptionRow(title: "Hide on app switch", isOn: $settings.s.collapseOnAppSwitch)
@@ -310,28 +310,6 @@ private struct Card<Content: View>: View {
         .fill(Color.primary.opacity(0.055)))
       .overlay(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous)
         .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
-  }
-}
-
-private struct CardTitle: View {
-  let title: String
-  let value: String?
-  init(_ title: String, value: String? = nil) { self.title = title; self.value = value }
-  var body: some View {
-    HStack(alignment: .firstTextBaseline) {
-      Text(title.uppercased())
-        .font(.system(size: 11, weight: .semibold))
-        .tracking(0.4)
-        .foregroundStyle(Color.accentColor)
-      Spacer(minLength: 8)
-      if let value {
-        Text(value)
-          .font(.system(size: 12, weight: .medium).monospacedDigit())
-      }
-    }
-    .padding(.horizontal, 2)
-    .accessibilityElement(children: .combine)
-    .accessibilityAddTraits(.isHeader)
   }
 }
 
@@ -370,21 +348,6 @@ private struct RowLabel: View {
       .padding(.horizontal, 6)
       .frame(height: 24)
       .contentShape(Rectangle())
-  }
-}
-
-private struct AppIcon: View {
-  let pid: pid_t
-  var body: some View {
-    if let icon = NSRunningApplication(processIdentifier: pid)?.icon,
-       NSRunningApplication(processIdentifier: pid)?.bundleIdentifier != "com.apple.MenuBarAgent" {
-      Image(nsImage: icon).resizable().interpolation(.high).frame(width: 16, height: 16)
-    } else {
-      Image(systemName: "menubar.rectangle")
-        .font(.system(size: 11))
-        .foregroundStyle(.secondary)
-        .frame(width: 16, height: 16)
-    }
   }
 }
 
@@ -439,15 +402,4 @@ private struct HoverWrapper<Content: View>: View {
       .onHover { hovering = $0 }
       .animation(.easeOut(duration: 0.1), value: hovering)
   }
-}
-
-private struct VisualEffect: NSViewRepresentable {
-  func makeNSView(context: Context) -> NSVisualEffectView {
-    let v = NSVisualEffectView()
-    v.material = .menu
-    v.blendingMode = .behindWindow
-    v.state = .active
-    return v
-  }
-  func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }

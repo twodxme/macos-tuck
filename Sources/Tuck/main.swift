@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     panelModel.toggleAll = { [weak self] in self?.status.toggleAll() }
     panelModel.openTucked = { [weak self] item in self?.status.openTucked(item) }
     panelModel.openSettings = { [weak self] in self?.settingsWindow.show() }
-    panelModel.showHelp = { [weak self] in self?.status.showHelp() }
+    panelModel.showHelp = { [weak self] in self?.settingsWindow.show(pane: .hiding) }
     status.onToggleMenu = { [weak self] button in
       guard let self else { return }
       self.syncPanel()

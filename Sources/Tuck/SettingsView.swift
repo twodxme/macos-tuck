@@ -18,6 +18,7 @@ final class SettingsModel: ObservableObject {
   @Published var loginError: String?
   @Published var tucked: [BarItem] = []
   @Published var trusted = TuckedScanner.isTrusted
+  @Published var pane: SettingsPane = .general
   var onChange: (TuckSettings) -> Void = { _ in }
   var untuck: (BarItem) -> Void = { _ in }
   var refreshTucked: () -> Void = {}
@@ -82,15 +83,14 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
   @ObservedObject var model: SettingsModel
-  @State private var pane: SettingsPane = .general
 
   var body: some View {
     HStack(spacing: 0) {
-      Sidebar(pane: $pane)
+      Sidebar(pane: $model.pane)
         .frame(width: 184)
       Divider()
       Group {
-        switch pane {
+        switch model.pane {
         case .general: GeneralPane(model: model)
         case .hiding: HidingPane(model: model)
         case .tucked: TuckedPane(model: model)
@@ -134,7 +134,7 @@ private struct Sidebar: View {
     }
     .padding(.horizontal, 10)
     .frame(maxHeight: .infinity)
-    .background(SidebarMaterial())
+    .background(Material(.sidebar, state: .followsWindowActiveState))
   }
 }
 
@@ -188,7 +188,7 @@ private struct GeneralPane: View {
           ForEach(HotKeyPreset.allCases) { Text($0.label).tag($0) }
         }
       } header: {
-        PaneHeader("Opening")
+        SectionTitle("Opening")
       } footer: {
         Caption("Tap the shortcut to show or hide. Hold it to peek: icons tuck away again when you let go.")
       }
@@ -203,7 +203,7 @@ private struct GeneralPane: View {
           Text(err).font(.caption).foregroundStyle(.red)
         }
       } header: {
-        PaneHeader("Startup")
+        SectionTitle("Startup")
       }
     }
   }
@@ -220,7 +220,7 @@ private struct HidingPane: View {
           .frame(maxWidth: .infinity)
           .padding(.vertical, 4)
       } header: {
-        PaneHeader("How it works")
+        SectionTitle("How it works")
       } footer: {
         Caption("Hold ⌘ and drag a menu bar icon left of Tuck's divider ( | ) to tuck it, right of the arrow to bring it back.")
       }
@@ -243,7 +243,7 @@ private struct HidingPane: View {
           .disabled(hover)
         Toggle("Open while ⌘-dragging menu bar icons", isOn: $model.s.openWhileDragging)
       } header: {
-        PaneHeader("Tucking away")
+        SectionTitle("Tucking away")
       } footer: {
         Caption(hover
                 ? "In hover mode Tuck closes once the pointer leaves the menu bar."
@@ -253,7 +253,7 @@ private struct HidingPane: View {
       Section {
         Toggle("Add an always-hidden section", isOn: $model.s.alwaysHidden)
       } header: {
-        PaneHeader("Always hidden")
+        SectionTitle("Always hidden")
       } footer: {
         Caption("Icons left of the dashed divider stay hidden even when Tuck is open. ⌥-click the arrow to show them.")
       }
@@ -286,7 +286,7 @@ private struct TuckedPane: View {
           .accessibilityElement(children: .combine)
         }
       } header: {
-        PaneHeader("Tracking")
+        SectionTitle("Tracking")
       } footer: {
         Caption("Accessibility lets Tuck see which icons are tucked and move them for you. Nothing leaves your Mac.")
       }
@@ -301,7 +301,7 @@ private struct TuckedPane: View {
             Text("Same as the main shortcut, so it's off.").font(.caption).foregroundStyle(.red)
           }
         } header: {
-          PaneHeader("Options")
+          SectionTitle("Options")
         }
 
         Section {
@@ -320,7 +320,7 @@ private struct TuckedPane: View {
           }
         } header: {
           HStack {
-            PaneHeader("Tucked now")
+            SectionTitle("Tucked now")
             Spacer()
             Button {
               model.refreshTucked()
@@ -351,14 +351,14 @@ private struct AppearancePane: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 2)
       } header: {
-        PaneHeader("Arrow")
+        SectionTitle("Arrow")
       }
 
       Section {
         Toggle("Show divider while open", isOn: $model.s.showDivider)
         Toggle("Show tooltip on the arrow", isOn: $model.s.showTooltip)
       } header: {
-        PaneHeader("Menu bar")
+        SectionTitle("Menu bar")
       }
 
       Section {
@@ -369,7 +369,7 @@ private struct AppearancePane: View {
         .labelsHidden()
         .frame(maxWidth: .infinity)
       } header: {
-        PaneHeader("Spacing")
+        SectionTitle("Spacing")
       } footer: {
         Caption("Changes spacing for every app's icon, so more fit beside the notch. Apps pick it up when they relaunch; log out to apply it everywhere.")
       }
@@ -421,18 +421,6 @@ private struct AboutPane: View {
 
 private var appVersion: String {
   Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
-}
-
-/// Section title in the panel's style: small, uppercase, accent-colored.
-private struct PaneHeader: View {
-  let text: String
-  init(_ text: String) { self.text = text }
-  var body: some View {
-    Text(text.uppercased())
-      .font(.system(size: 11, weight: .semibold))
-      .tracking(0.4)
-      .foregroundStyle(Color.accentColor)
-  }
 }
 
 private struct Caption: View {
@@ -545,44 +533,24 @@ private struct BarDiagram: View {
   }
 }
 
-/// A tucked item's app icon, or a generic one for system items.
-private struct BarItemIcon: View {
-  let pid: pid_t
-  var body: some View {
-    let app = NSRunningApplication(processIdentifier: pid)
-    if let icon = app?.icon, app?.bundleIdentifier != "com.apple.MenuBarAgent" {
-      Image(nsImage: icon).resizable().interpolation(.high).frame(width: 16, height: 16)
-    } else {
-      Image(systemName: "menubar.rectangle").foregroundStyle(.secondary).frame(width: 16, height: 16)
-    }
-  }
-}
-
-private struct SidebarMaterial: NSViewRepresentable {
-  func makeNSView(context: Context) -> NSVisualEffectView {
-    let v = NSVisualEffectView()
-    v.material = .sidebar
-    v.blendingMode = .behindWindow
-    v.state = .followsWindowActiveState
-    return v
-  }
-  func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
-}
-
 @MainActor
 final class SettingsWindow {
   private var window: NSWindow?
+  private var observers: [NSObjectProtocol] = []
   private let model: SettingsModel
 
   init(model: SettingsModel) { self.model = model }
 
-  func show() {
+  /// Settings is built on demand and torn down on close: a closed window
+  /// would otherwise keep its whole SwiftUI view graph (~7 MB) alive.
+  func show(pane: SettingsPane? = nil) {
+    if let pane { model.pane = pane }
     if window == nil {
       let host = NSHostingController(rootView: SettingsView(model: model))
       // Fixed size: left to itself the hosting controller adds the title
       // bar's height under the full-size content view.
       host.sizingOptions = []
-      let w = NSWindow(contentViewController: host)
+      let w = SettingsNSWindow(contentViewController: host)
       w.title = "Tuck Settings"
       // The sidebar runs up under the traffic lights.
       w.styleMask = [.titled, .closable, .fullSizeContentView]
@@ -593,19 +561,45 @@ final class SettingsWindow {
       w.setContentSize(NSSize(width: 660, height: 500))
       w.center()
       window = w
+      let nc = NotificationCenter.default
       // Coming back from System Settings after granting Accessibility.
-      NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: w, queue: .main) { [weak self] _ in
+      observers.append(nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: w, queue: .main) { [weak self] _ in
         MainActor.assumeIsolated {
           guard let self, self.model.trusted != TuckedScanner.isTrusted else { return }
           self.model.trusted = TuckedScanner.isTrusted
           if self.model.trusted && self.model.s.trackTucked { self.model.refreshTucked() }
         }
-      }
+      })
+      observers.append(nc.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { [weak self] _ in
+        MainActor.assumeIsolated { self?.tearDown() }
+      })
     }
     model.launchAtLogin = SMAppService.mainApp.status == .enabled
     model.trusted = TuckedScanner.isTrusted
     if model.s.trackTucked && model.trusted { model.refreshTucked() }
     NSApp.activate(ignoringOtherApps: true)
     window?.makeKeyAndOrderFront(nil)
+  }
+
+  private func tearDown() {
+    observers.forEach(NotificationCenter.default.removeObserver)
+    observers = []
+    // Let the close finish before dropping the last reference.
+    let w = window
+    window = nil
+    DispatchQueue.main.async { w?.contentViewController = nil }
+  }
+}
+
+/// Tuck has no app menu (it lives in the menu bar), so nothing maps ⌘W to
+/// Close; the window handles it itself.
+private final class SettingsNSWindow: NSWindow {
+  override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+       event.charactersIgnoringModifiers == "w" {
+      performClose(nil)
+      return true
+    }
+    return super.performKeyEquivalent(with: event)
   }
 }

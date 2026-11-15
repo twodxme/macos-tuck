@@ -603,16 +603,4 @@ final class StatusController: NSObject {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { TuckedScanner.press(f) }
     }
   }
-
-  func showHelp() {
-    let alert = NSAlert()
-    alert.messageText = "Tucking icons"
-    var text = "Hold ⌘ and drag any menu bar icon to the left of Tuck's divider ( | ) to tuck it away. Drag it back to the right of the arrow to keep it visible.\n\nClick the arrow or press the shortcut to show or hide tucked icons. Hold the shortcut to peek."
-    if hiddenDivider != nil {
-      text += "\n\nIcons left of the dashed divider stay hidden even when Tuck is open. ⌥-click the arrow to show them too."
-    }
-    alert.informativeText = text
-    NSApp.activate(ignoringOtherApps: true)
-    alert.runModal()
-  }
 }
