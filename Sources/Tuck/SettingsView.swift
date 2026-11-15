@@ -446,14 +446,13 @@ private struct Caption: View {
 private struct TuckLogo: View {
   let size: CGFloat
   var body: some View {
-    Image(systemName: "chevron.left")
-      .font(.system(size: size * 0.42, weight: .bold))
-      .foregroundStyle(.white)
+    // macOS hands back the icon already masked, with the icon grid's ~10%
+    // transparent margin on each side, so draw it larger to fill `size`.
+    Image(nsImage: NSApp.applicationIconImage)
+      .resizable()
+      .interpolation(.high)
+      .frame(width: size * 1.24, height: size * 1.24)
       .frame(width: size, height: size)
-      .background(RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-        .fill(LinearGradient(colors: [Color.accentColor, Color.accentColor.opacity(0.7)],
-                             startPoint: .top, endPoint: .bottom)))
-      .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
       .accessibilityHidden(true)
   }
 }

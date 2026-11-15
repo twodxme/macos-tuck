@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" alt="Tuck's icon: a white glass chevron on a pink rounded square" width="128"></p>
+
 # Tuck for macOS
 
 Tuck the menu bar icons you rarely need behind a divider. Click the arrow, press a shortcut, or let it fold itself away again. The macOS sibling of [Tuck for Omarchy](https://github.com/twodxme/omarchy-tuck).
@@ -146,6 +148,7 @@ A few macOS 27 details Tuck works around: clicks on menu bar icons arrive withou
 ```bash
 swift build
 scripts/test.sh                 # swift-testing, works with only the CLT installed
+scripts/make-icon.sh            # redraw Resources/AppIcon.icns from scripts/make-icon.swift
 /usr/bin/log stream --level info --predicate 'subsystem == "com.twodxme.tuck"'
 ```
 

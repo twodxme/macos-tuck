@@ -24,6 +24,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/Tuck"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 # CI passes the tag's version (VERSION=1.2.0) so the app matches its release.
 if [[ -n "${VERSION:-}" ]]; then
   plutil -replace CFBundleShortVersionString -string "$VERSION" "$app/Contents/Info.plist"
